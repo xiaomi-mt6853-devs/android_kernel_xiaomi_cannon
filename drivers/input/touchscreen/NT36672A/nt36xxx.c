@@ -53,6 +53,9 @@
 
 #include "../xiaomi-spi-tp/spi-xiaomi-tp.h"
 
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+#include <linux/input/tp_common.h>
+#endif
 
 /*Input event*/
 #define INPUT_EVENT_START			0
@@ -212,6 +215,36 @@ struct attribute *nvt_panel_attr[] = {
 	&dev_attr_display_maker.attr,
 	NULL,
 };
+
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+static ssize_t double_tap_show(struct kobject *kobj,
+                               struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", ts->db_wakeup);
+}
+
+static ssize_t double_tap_store(struct kobject *kobj,
+                                struct kobj_attribute *attr, const char *buf,
+                                size_t count)
+{
+    int rc, val;
+
+    rc = kstrtoint(buf, 10, &val);
+    if (rc)
+    return -EINVAL;
+
+    ts->db_wakeup = !!val;
+    if (ts->ic_state >= NVT_IC_RESUME_IN) {
+        tp_enable_doubleclick(!!ts->db_wakeup);
+    }
+    return count;
+}
+
+static struct tp_common_ops double_tap_ops = {
+    .show = double_tap_show,
+    .store = double_tap_store
+};
+#endif
 
 static uint8_t bTouchIsAwake = 0;
 /*******************************************************
@@ -2117,6 +2150,13 @@ static int32_t nvt_ts_probe(struct platform_device *pdev)
 	for (retry = 0; retry < (sizeof(gesture_key_array) / sizeof(gesture_key_array[0])); retry++) {
 		input_set_capability(ts->input_dev, EV_KEY, gesture_key_array[retry]);
 	}
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+    ret = tp_common_set_double_tap_ops(&double_tap_ops);
+    if (ret < 0) {
+        NVT_ERR("%s: Failed to create double_tap node err=%d\n",
+                __func__, ret);
+    }
+#endif
 #endif
 
 	sprintf(ts->phys, "input/ts");
