@@ -178,11 +178,6 @@ static void fpc1022_get_irqNum(struct fpc1022_data *fpc1022)
 
 		fpc1022->irq_num = irq_of_parse_and_map(node, 0);	//xpt
 		fpc1022->irq_gpio = of_get_named_gpio(node, "fpc,gpio_irq", 0);
-		printk("%s , fpc1022->irq_num = %d, fpc1022->irq_gpio = %d\n",
-		       __func__, fpc1022->irq_num, fpc1022->irq_gpio);
-		if (!fpc1022->irq_num)
-			printk("irq_of_parse_and_map fail!!\n");
-
 	} else
 		pr_err("%s can't find compatible node\n", __func__);
 }
@@ -717,9 +712,6 @@ static int check_hwid(struct spi_device *spi)
 
 	do {
 		spi_read_hwid(spi, tmp_buf);
-		printk(KERN_INFO "%s, fpc1022 chip version is 0x%x, 0x%x\n",
-		       __func__, tmp_buf[0], tmp_buf[1]);
-
 		time_out++;
 
 		hardware_id = ((tmp_buf[0] << 8) | (tmp_buf[1]));
@@ -738,15 +730,9 @@ static int check_hwid(struct spi_device *spi)
 		}
 
 		if (!error) {
-			printk(KERN_INFO
-			       "fpc %s, fpc1022 chip version check pass, time_out=%d\n",
-			       __func__, time_out);
 			return 0;
 		}
 	} while (time_out < 2);
-
-	printk(KERN_INFO "%s, fpc1022 chip version read failed, time_out=%d\n",
-	       __func__, time_out);
 
 	return -1;
 }
@@ -755,8 +741,6 @@ MODULE_DEVICE_TABLE(of, fpc1022_spi_of_match);
 
 static int __init fpc1022_init(void)
 {
-	printk(KERN_INFO "%s\n", __func__);
-
 	if (goodix_fp_exist) {
 		pr_err
 		    ("%s goodix sensor has been detected, so exit FPC sensor detect.\n",
@@ -765,20 +749,14 @@ static int __init fpc1022_init(void)
 	}
 
 	if (0 != platform_driver_register(&fpc1022_driver)) {
-		printk(KERN_INFO "%s: register platform driver fail\n",
-		       __func__);
 		return -EINVAL;
-	} else
-		printk(KERN_INFO "%s: register platform driver success\n",
-		       __func__);
+	}
 
 	return 0;
 }
 
 static void __exit fpc1022_exit(void)
 {
-	printk(KERN_INFO "%s\n", __func__);
-
 	platform_driver_unregister(&fpc1022_driver);
 }
 
