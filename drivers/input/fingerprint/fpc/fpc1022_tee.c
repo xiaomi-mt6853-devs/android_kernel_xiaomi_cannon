@@ -217,9 +217,9 @@ static ssize_t hw_reset_set(struct device *dev,
 static DEVICE_ATTR(hw_reset, 0200, NULL, hw_reset_set);
 
 /**
-* sysfs node for controlling whether the driver is allowed
-* to wake up the platform on interrupt.
-*/
+ * sysfs node for controlling whether the driver is allowed
+ * to wake up the platform on interrupt.
+ */
 static ssize_t wakeup_enable_set(struct device *dev,
 				 struct device_attribute *attr, const char *buf,
 				 size_t count)
@@ -230,10 +230,10 @@ static ssize_t wakeup_enable_set(struct device *dev,
 
 static DEVICE_ATTR(wakeup_enable, 0200, NULL, wakeup_enable_set);
 
-/**
-* sysfs node for sending event to make the system interactive,
-* i.e. waking up
-*/
+/*
+ * sysfs node for sending event to make the system interactive,
+ * i.e. waking up
+ */
 static ssize_t do_wakeup_set(struct device *dev,
 			     struct device_attribute *attr, const char *buf,
 			     size_t count)
@@ -241,15 +241,16 @@ static ssize_t do_wakeup_set(struct device *dev,
 	struct fpc1022_data *fpc1022 = dev_get_drvdata(dev);
 
 	if (count > 0) {
-		/* Sending power key event creates a toggling
-		   effect that may be desired. It could be
-		   replaced by another event such as KEY_WAKEUP. */
+		/*
+		 * Sending power key event creates a toggling
+		 * effect that may be desired. It could be
+		 * replaced by another event such as KEY_WAKEUP.
+		 */
 		input_report_key(fpc1022->idev, KEY_POWER, 1);
 		input_report_key(fpc1022->idev, KEY_POWER, 0);
 		input_sync(fpc1022->idev);
-	} else {
+	} else
 		return -EINVAL;
-	}
 
 	return count;
 }
@@ -261,6 +262,7 @@ static ssize_t clk_enable_set(struct device *dev,
 			      size_t count)
 {
 	struct fpc1022_data *fpc1022 = dev_get_drvdata(dev);
+
 	dev_dbg(fpc1022->dev, " buff is %d, %s\n", *buf, __func__);
 
 	if (!(fpc1022->spi)) {
@@ -286,26 +288,28 @@ static ssize_t clk_enable_set(struct device *dev,
 static DEVICE_ATTR(clk_enable, 0200, NULL, clk_enable_set);
 
 /**
-* sysf node to check the interrupt status of the sensor, the interrupt
-* handler should perform sysf_notify to allow userland to poll the node.
-*/
+ * sysf node to check the interrupt status of the sensor, the interrupt
+ * handler should perform sysf_notify to allow userland to poll the node.
+ */
 static ssize_t irq_get(struct device *device,
 		       struct device_attribute *attribute, char *buffer)
 {
 	struct fpc1022_data *fpc1022 = dev_get_drvdata(device);
 	int irq = __gpio_get_value(fpc1022->irq_gpio);
+
 	return scnprintf(buffer, PAGE_SIZE, "%i\n", irq);
 }
 
 /**
-* writing to the irq node will just drop a printk message
-* and return success, used for latency measurement.
-*/
+ * writing to the irq node will just drop a printk message
+ * and return success, used for latency measurement.
+ */
 static ssize_t irq_ack(struct device *device,
 		       struct device_attribute *attribute,
 		       const char *buffer, size_t count)
 {
 	struct fpc1022_data *fpc1022 = dev_get_drvdata(device);
+
 	dev_dbg(fpc1022->dev, "%s\n", __func__);
 	return count;
 }
@@ -336,11 +340,12 @@ static ssize_t fpc_ic_is_exist(struct device *device,
 			       struct device_attribute *attribute, char *buffer)
 {
 	int fpc_exist = 0;
-	if (fpc1022_fp_exist) {
+
+	if (fpc1022_fp_exist)
 		fpc_exist = 1;
-	} else {
+	else
 		fpc_exist = 0;
-	}
+
 	return scnprintf(buffer, PAGE_SIZE, "%i\n", fpc_exist);
 }
 
@@ -366,7 +371,6 @@ static void notification_work(struct work_struct *work)
 {
 	pr_info("%s: fpc fp unblank\n", __func__);
 	mtk_drm_early_resume(FP_UNLOCK_REJECTION_TIMEOUT);
-	//mtk_dsi_enable_ext_interface(FP_UNLOCK_REJECTION_TIMEOUT);
 }
 #endif
 
@@ -376,13 +380,16 @@ static irqreturn_t fpc1022_irq_handler(int irq, void *handle)
 
 	dev_dbg(fpc1022->dev, "%s\n", __func__);
 
-	/* Make sure 'wakeup_enabled' is updated before using it
-	 ** since this is interrupt context (other thread...) */
+	/*
+	 * Make sure 'wakeup_enabled' is updated before using it
+	 * since this is interrupt context (other thread...)
+	 */
 
 	mutex_lock(&fpc1022->lock);
-	if (atomic_read(&fpc1022->wakeup_enabled)) {
+
+	if (atomic_read(&fpc1022->wakeup_enabled))
 		__pm_wakeup_event(fpc1022->ttw_wl, msecs_to_jiffies(FPC_TTW_HOLD_TIME));
-	}
+
 	mutex_unlock(&fpc1022->lock);
 
 	sysfs_notify(&fpc1022->dev->kobj, NULL, dev_attr_irq.attr.name);
@@ -454,8 +461,6 @@ static int fpc1022_platform_probe(struct platform_device *pldev)
 
 	fpc1022 = devm_kzalloc(dev, sizeof(*fpc1022), GFP_KERNEL);
 	if (!fpc1022) {
-		dev_err(dev,
-			"failed to allocate memory for struct fpc1022_data\n");
 		ret = -ENOMEM;
 		goto err_fpc1022_malloc;
 	}
@@ -489,12 +494,11 @@ static int fpc1022_platform_probe(struct platform_device *pldev)
 		ret = PTR_ERR(fpc1022->pinctrl);
 		goto err_pinctrl_get;
 	}
-	//fpc1022->st_irq = pinctrl_lookup_state(fpc1022->pinctrl, "fpc_irq");
+
 	fpc1022->st_irq = pinctrl_lookup_state(fpc1022->pinctrl, "default");
 	if (IS_ERR(fpc1022->st_irq)) {
 		ret = PTR_ERR(fpc1022->st_irq);
 		dev_err(dev, "pinctrl err, irq\n");
-		//goto err_lookup_state;
 	}
 
 	fpc1022->st_rst_h =
@@ -570,7 +574,7 @@ static int fpc1022_platform_probe(struct platform_device *pldev)
 
 	/* Request that the interrupt should be wakeable */
 	enable_irq_wake(fpc1022->irq_num);
-	fpc1022->ttw_wl = wakeup_source_register(dev,"fpc_ttw_wl");
+	fpc1022->ttw_wl = wakeup_source_register(dev, "fpc_ttw_wl");
 
 	ret = sysfs_create_group(&dev->kobj, &attribute_group);
 	if (ret) {
@@ -650,7 +654,7 @@ static struct platform_driver fpc1022_driver = {
 	.remove = fpc1022_platform_remove
 };
 
-static int spi_read_hwid(struct spi_device *spi, u8 * rx_buf)
+static int spi_read_hwid(struct spi_device *spi, u8 *rx_buf)
 {
 	int error;
 	struct spi_message msg;
@@ -660,8 +664,6 @@ static int spi_read_hwid(struct spi_device *spi, u8 * rx_buf)
 
 	xfer = kzalloc(sizeof(*xfer) * 2, GFP_KERNEL);
 	if (xfer == NULL) {
-		dev_err(&spi->dev, "%s, no memory for SPI transfer\n",
-			__func__);
 		return -ENOMEM;
 	}
 
@@ -729,9 +731,9 @@ static int check_hwid(struct spi_device *spi)
 			error = -1;
 		}
 
-		if (!error) {
+		if (!error)
 			return 0;
-		}
+
 	} while (time_out < 2);
 
 	return -1;
@@ -748,9 +750,8 @@ static int __init fpc1022_init(void)
 		return -EINVAL;
 	}
 
-	if (0 != platform_driver_register(&fpc1022_driver)) {
+	if (platform_driver_register(&fpc1022_driver) != 0)
 		return -EINVAL;
-	}
 
 	return 0;
 }
