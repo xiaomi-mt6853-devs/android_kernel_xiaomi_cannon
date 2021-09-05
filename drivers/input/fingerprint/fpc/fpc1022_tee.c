@@ -72,18 +72,13 @@
 #define FP_UNLOCK_REJECTION_TIMEOUT (FPC_TTW_HOLD_TIME - 500) /*ms*/
 
 #define     FPC102X_REG_HWID      252
-//#define FPC1021_CHIP 0x0210
-//#define FPC1021_CHIP_MASK_SENSOR_TYPE 0xfff0
 #define FPC1022_CHIP 0x1800
 #define FPC1022_CHIP_MASK_SENSOR_TYPE 0xff00
 
 #define GPIO_GET(pin) __gpio_get_value(pin)	//get input pin value
 
 #define GPIOIRQ 2		//XPT
-//void mt_spi_enable_clk(struct mt_spi_t *ms);
-//void mt_spi_disable_clk(struct mt_spi_t *ms);
 
-//#define FPC_DRM_INTERFACE_WA
 #ifndef FPC_DRM_INTERFACE_WA
 #include <drm/drm_bridge.h>
 #include <drm/drm_notifier_mi.h>
@@ -97,7 +92,6 @@ extern void mt_spi_disable_master_clk(struct spi_device *spidev);
 #endif
 
 #ifndef FPC_DRM_INTERFACE_WA
-//extern int mtk_dsi_enable_ext_interface(int timeout);
 extern int mtk_drm_early_resume(int timeout);
 #endif
 
@@ -113,12 +107,10 @@ struct fpc1022_data {
 	struct spi_device *spi;
 	int irq_gpio;
 	int irq_num;
-	//wwm//int rst_gpio;
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *st_irq;	//xpt
 	struct pinctrl_state *st_rst_l;
 	struct pinctrl_state *st_rst_h;
-	//struct pinctrl_state *pins_miso_spi;
 
 	struct input_dev *idev;
 	char idev_name[32];
@@ -139,7 +131,6 @@ extern bool goodix_fp_exist;
 extern struct spi_device *spi_fingerprint;
 bool fpc1022_fp_exist = false;
 
-//static struct mt_spi_t *fpc_ms;
 static struct fpc1022_data *fpc1022;
 
 static int check_hwid(struct spi_device *spi);
@@ -163,7 +154,6 @@ static const struct mt_chip_conf spi_mcc = {
 	.rx_endian = SPI_LENDIAN,
 
 	.com_mod = FIFO_TRANSFER,
-	/* .com_mod = DMA_TRANSFER, */
 
 	.pause = 1,
 	.finish_intr = 1,
@@ -179,20 +169,12 @@ u32 spi_speed = 1 * 1000000;
 
 static void fpc1022_get_irqNum(struct fpc1022_data *fpc1022)
 {
-	//u32 ints[2] = {0, 0};
+
 	struct device_node *node;
-
-	printk("%s\n", __func__);
-
-	// pinctrl_select_state(fpc1022->pinctrl, fpc1022->st_irq); //xpt
 
 	node = of_find_compatible_node(NULL, NULL, "mediatek,fpc1022_irq");
 
 	if (node) {
-		//xpt of_property_read_u32_array(node, "debounce", ints, ARRAY_SIZE(ints));
-		//xpt fpc1022->irq_gpio = ints[0];
-		/*debounce = ints[1];
-		   mt_gpio_set_debounce(gpiopin, debounce); */
 
 		fpc1022->irq_num = irq_of_parse_and_map(node, 0);	//xpt
 		fpc1022->irq_gpio = of_get_named_gpio(node, "fpc,gpio_irq", 0);
@@ -248,17 +230,6 @@ static ssize_t wakeup_enable_set(struct device *dev,
 				 size_t count)
 {
 	struct fpc1022_data *fpc1022 = dev_get_drvdata(dev);
-
-/*
-	if (!strncmp(buf, "enable", strlen("enable"))) {
-		fpc1022->wakeup_enabled = true;
-		smp_wmb();
-	} else if (!strncmp(buf, "disable", strlen("disable"))) {
-		fpc1022->wakeup_enabled = false;
-		smp_wmb();
-	} else
-		return -EINVAL;
-*/
 	return count;
 }
 
@@ -530,15 +501,7 @@ static int fpc1022_platform_probe(struct platform_device *pldev)
 		dev_err(dev, "pinctrl err, irq\n");
 		//goto err_lookup_state;
 	}
-	//C3D project workaround, 2 spi device on spi1, just use miso as 'cs-gpios', change to spi mode.
-	/*
-	   fpc1022->pins_miso_spi = pinctrl_lookup_state(fpc1022->pinctrl, "miso_spi");
-	   if (IS_ERR(fpc1022->pins_miso_spi)) {
-	   ret = PTR_ERR(fpc1022->pins_miso_spi);
-	   dev_err(dev, "pinctrl err, miso_spi\n");
-	   goto err_lookup_state;
-	   }
-	 */
+
 	fpc1022->st_rst_h =
 	    pinctrl_lookup_state(fpc1022->pinctrl, "reset_high");
 	if (IS_ERR(fpc1022->st_rst_h)) {
@@ -788,110 +751,12 @@ static int check_hwid(struct spi_device *spi)
 	return -1;
 }
 
-#if 0
-static int fpc1022_spi_probe(struct spi_device *spi)
-{
-	int error = 0;
-
-	printk(KERN_INFO "%s\n", __func__);
-	printk("fpc1022_spi_probe \n");
-
-	printk(KERN_INFO "%s\n", __func__);
-	pr_err("fpc1022_spi_probe \n");
-
-	printk(KERN_INFO "%s\n", __func__);
-	pr_err("fpc1022_spi_probe \n");
-
-	//pr_err("%s() switch miso pin mode\n", __func__);
-	//pinctrl_select_state(fpc1022->pinctrl, fpc1022->pins_miso_spi);
-
-#ifndef CONFIG_SPI_MT65XX
-	spi->controller_data = (void *)&spi_mcc;
-
-	spi->mode = SPI_MODE_0;
-	spi->bits_per_word = 8;
-	spi->chip_select = 0;
-
-	error = spi_setup(spi);
-	if (error) {
-		dev_err(&spi->dev, "spi_setup failed\n");
-		goto err_spi_setup;
-	}
-#endif
-	pr_err("%s now check chip ID\n", __func__);
-	error = check_hwid(spi);
-
-	if (error < 0) {
-		fpc1022_fp_exist = false;
-		dev_err(&spi->dev, "%s chek_hwid failed!\n", __func__);
-		goto err_check_hwid;
-	}
-	fpc1022_fp_exist = true;
-	//set_fp_vendor(FP_VENDOR_FPC);
-	pr_err("%s %d FPC fingerprint sensor detected\n", __func__, __LINE__);
-
-	//fpc_ms=spi_master_get_devdata(spi->master);
-	mt_spi_enable_master_clk(spi);
-	fpc1022->spi = spi;
-
-#ifdef CONFIG_HQ_SYSFS_SUPPORT
-	hq_regiser_hw_info(HWID_FP, "FPC1022");
-#endif
-
-	return error;
-
-err_check_hwid:
-#ifndef CONFIG_SPI_MT65XX
-err_spi_setup:
-#endif
-	platform_driver_unregister(&fpc1022_driver);
-
-	return error;
-}
-
-static int fpc1022_spi_remove(struct spi_device *spi)
-{
-	printk(KERN_INFO "%s\n", __func__);
-
-	return 0;
-}
-
-static struct of_device_id fpc1022_spi_of_match[] = {
-	{.compatible = "fpc,fpc1022",},
-	{}
-};
-#endif
-#if 0
-static struct of_device_id fpc1022_spi_of_match[] = {
-	{.compatible = "mediatek,fingerprint",},	//xpt { .compatible = "ix,btp", },
-	{}
-};
-#endif
 MODULE_DEVICE_TABLE(of, fpc1022_spi_of_match);
 
-#if 0
-static struct spi_driver spi_driver = {
-	.driver = {
-		   .name = "btp",
-		   .owner = THIS_MODULE,
-		   .of_match_table = fpc1022_spi_of_match,
-		   .bus = &spi_bus_type,
-		   },
-	.probe = fpc1022_spi_probe,
-	.remove = fpc1022_spi_remove
-};
-
-#endif
 static int __init fpc1022_init(void)
 {
 	printk(KERN_INFO "%s\n", __func__);
 
-/*
-         if(fp_idx_ic_exist){
-                   printk("fpc1022_init called but there is a idx fp ic exist\n");
-                   return -EINVAL;
-         }
-*/
 	if (goodix_fp_exist) {
 		pr_err
 		    ("%s goodix sensor has been detected, so exit FPC sensor detect.\n",
@@ -915,7 +780,6 @@ static void __exit fpc1022_exit(void)
 	printk(KERN_INFO "%s\n", __func__);
 
 	platform_driver_unregister(&fpc1022_driver);
-	//spi_unregister_driver(&spi_driver);
 }
 
 late_initcall(fpc1022_init);
