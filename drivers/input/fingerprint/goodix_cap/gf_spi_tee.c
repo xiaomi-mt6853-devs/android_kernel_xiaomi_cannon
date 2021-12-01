@@ -975,9 +975,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			break;
 		}
 
-		if (GF_KEY_HOME == gf_key.key) {
-			key_input = GF_KEY_INPUT_HOME;
-		} else if (GF_KEY_POWER == gf_key.key) {
+		if (GF_KEY_POWER == gf_key.key) {
 			key_input = GF_KEY_INPUT_POWER;
 		} else if (GF_KEY_CAMERA == gf_key.key) {
 			key_input = GF_KEY_INPUT_CAMERA;
@@ -994,12 +992,6 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			input_report_key(gf_dev->input, key_input, 1);
 			input_sync(gf_dev->input);
 			input_report_key(gf_dev->input, key_input, 0);
-			input_sync(gf_dev->input);
-		}
-
-		if (GF_KEY_HOME == gf_key.key) {
-			input_report_key(gf_dev->input, key_input,
-					 gf_key.value);
 			input_sync(gf_dev->input);
 		}
 
