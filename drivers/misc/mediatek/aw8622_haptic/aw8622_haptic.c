@@ -241,34 +241,6 @@ static void aw8622_wavefrom_data_load(const struct firmware *cont, void *context
 	pr_debug("%s load %s success\n", __func__, aw8622_waveform_file_name[haptic->cur_load_idx + haptic->load_idx_offset]);
 }
 
-
-static int aw8622_get_f0_info(struct aw8622_haptic *haptic)
-{
-	const struct firmware *firmware;
-
-	if (request_firmware(&firmware, "aw8622_f0_info.bin", haptic->dev) < 0) {
-		dev_err(haptic->dev, "%s request_firmware failed\n", __func__);
-		return -EIO;
-	}
-	pr_debug("%s data %d size = %zu\n", __func__, firmware->data[0], firmware->size);
-	if (firmware->size > 0) {
-		haptic->load_idx_offset = firmware->data[0] & 0xff;
-		pr_debug("%s haptic->load_idx_offset 1 = %u\n", __func__, haptic->load_idx_offset);
-	}
-
-	if (haptic->load_idx_offset != LOW_F0_LOAD_WAVEFORM_OFFSET &&
-			haptic->load_idx_offset != MID_F0_LOAD_WAVEFORM_OFFSET &&
-			haptic->load_idx_offset != HIGH_F0_LOAD_WAVEFORM_OFFSET) {
-		haptic->load_idx_offset = MID_F0_LOAD_WAVEFORM_OFFSET;
-		pr_debug("%s haptic->load_idx_offset 2 = %u\n", __func__, haptic->load_idx_offset);
-	}
-	haptic->load_idx_offset *= NUMS_WAVEFORM_USED;
-	release_firmware(firmware);
-	pr_debug("%s haptic->load_idx_offset 3 = %u\n", __func__, haptic->load_idx_offset);
-	return 0;
-}
-
-
 static void aw8622_waveform_data_delay_work(struct work_struct *delay_work)
 {
 	int i = 0;
@@ -289,9 +261,6 @@ static void aw8622_waveform_data_delay_work(struct work_struct *delay_work)
 
 	pr_debug("%s load wavefile func enter\n", __func__);
 
-	/* get aw8622 f0 info */
-
-	aw8622_get_f0_info(haptic);
 	haptic->waveform_data_nums = NUMS_WAVEFORM_USED;
 
 	if (!haptic->is_malloc_wavedata_info) {
