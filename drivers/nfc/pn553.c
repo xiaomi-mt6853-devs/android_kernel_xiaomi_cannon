@@ -83,7 +83,7 @@ MODULE_DEVICE_TABLE(of, msm_match_table);
 #define MSG_PROP_GID         0x4F
 #define ESE_CLD_RST_OID      0x1E
 #define ESE_CLD_RST_RSP_SIZE 0x04
-#define WAKEUP_SRC_TIMEOUT		(2000)
+#define WAKEUP_SRC_TIMEOUT		(3000)
 
 extern int force_sig_info(int, struct siginfo *, struct task_struct *);
 
