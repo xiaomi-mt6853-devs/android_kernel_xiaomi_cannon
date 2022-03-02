@@ -1798,6 +1798,7 @@ static int pn544_remove(struct i2c_client *client)
 	unregister_reboot_notifier(&nfcc_notifier);
 	free_irq(client->irq, pn544_dev);
 	misc_deregister(&pn544_dev->pn544_device);
+	pm_relax(&client->dev);
 	mutex_destroy(&pn544_dev->read_mutex);
 	mutex_destroy(&pn544_dev->p61_state_mutex);
 	gpio_free(pn544_dev->irq_gpio);
