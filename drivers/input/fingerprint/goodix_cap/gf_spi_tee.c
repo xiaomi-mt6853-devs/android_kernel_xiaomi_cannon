@@ -978,7 +978,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (GF_KEY_HOME == gf_key.key) {
 			key_input = GF_KEY_INPUT_HOME;
 		} else if (GF_KEY_POWER == gf_key.key) {
-			key_input = GF_KEY_INPUT_HOME;
+			key_input = GF_KEY_INPUT_POWER;
 		} else if (GF_KEY_CAMERA == gf_key.key) {
 			key_input = GF_KEY_INPUT_CAMERA;
 		} else {
