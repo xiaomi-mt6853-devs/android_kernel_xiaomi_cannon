@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2018 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  */
 
@@ -18,6 +19,9 @@
 
 #include "leds-mtk-disp.h"
 
+#ifdef CONFIG_BACKLIGHT_SUPPORT_LM36273
+extern int lm36273_brightness_set(int level);
+#endif
 
 #ifdef CONFIG_DRM_MEDIATEK
 extern int mtkfb_set_backlight_level(unsigned int level);
@@ -175,7 +179,11 @@ static int led_level_disp_set(struct mtk_led_data *s_led,
 		output_met_backlight_tag(brightness);
 #endif
 #ifdef CONFIG_DRM_MEDIATEK
+#ifdef CONFIG_BACKLIGHT_SUPPORT_LM36273
+	lm36273_brightness_set(brightness);
+#else
 	mtkfb_set_backlight_level(brightness);
+#endif
 	s_led->conf.level = brightness;
 #endif
 	return 0;
