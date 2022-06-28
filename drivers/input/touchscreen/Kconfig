@@ -10,6 +10,9 @@ menuconfig INPUT_TOUCHSCREEN
 	  If unsure, say Y.
 
 source "drivers/input/touchscreen/mediatek/Kconfig"
+source "drivers/input/touchscreen/xiaomi-spi-tp/Kconfig"
+source "drivers/input/touchscreen/NT36672A/Kconfig"
+source "drivers/input/touchscreen/fts8719/Kconfig"
 
 source "drivers/input/touchscreen/NT36672C/Kconfig"
 
