@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -150,6 +151,8 @@ int ps_cali_report(int *value)
 	event.flush_action = CALI_ACTION;
 	event.word[0] = value[0];
 	event.word[1] = value[1];
+	event.word[2] = value[2];
+	event.word[3] = value[3];
 	err = sensor_input_event(alsps_context_obj->ps_mdev.minor, &event);
 	return err;
 }
