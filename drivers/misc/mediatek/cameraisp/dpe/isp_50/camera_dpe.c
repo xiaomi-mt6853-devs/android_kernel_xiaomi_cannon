@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -92,13 +93,17 @@ static unsigned long __read_mostly tracing_mark_write_addr;
 
 /*  #include "smi_common.h" */
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 #include <linux/pm_wakeup.h>
+#else
+#include <linux/wakelock.h>
 #endif
 
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 struct wakeup_source dpe_wake_lock;
+#else
+struct wake_lock dpe_wake_lock;
 #endif
 
 
@@ -449,7 +454,6 @@ static struct SV_LOG_STR gSvLog[DPE_IRQ_TYPE_AMOUNT];
 	unsigned int *ptr2 = &gSvLog[irq]._cnt[ppb][logT];\
 	unsigned int str_leng;\
 	unsigned int logi;\
-	int ret; \
 	struct SV_LOG_STR *pSrc = &gSvLog[irq];\
 	if (logT == _LOG_ERR) {\
 		str_leng = NORMAL_STR_LEN*ERR_PAGE; \
@@ -464,11 +468,8 @@ static struct SV_LOG_STR gSvLog[DPE_IRQ_TYPE_AMOUNT];
 	  (char *)&(gSvLog[irq]._str[ppb][logT][gSvLog[irq]._cnt[ppb][logT]]);\
 	avaLen = str_leng - 1 - gSvLog[irq]._cnt[ppb][logT];\
 	if (avaLen > 1) {\
-		ret = snprintf((char *)(pDes), avaLen, fmt,\
+		snprintf((char *)(pDes), avaLen, fmt,\
 			##__VA_ARGS__);   \
-		if (ret < 0) { \
-			LOG_INF("snprintf fail(%d)\n", ret); \
-		} \
 		if ('\0' != gSvLog[irq]._str[ppb][logT][str_leng - 1]) {\
 			LOG_INF("log str over flow(%d)", irq);\
 		} \
@@ -533,10 +534,7 @@ static struct SV_LOG_STR gSvLog[DPE_IRQ_TYPE_AMOUNT];
 			ptr = pDes = (char *)&(pSrc->_str[ppb][logT][\
 				pSrc->_cnt[ppb][logT]]);\
 			ptr2 = &(pSrc->_cnt[ppb][logT]);\
-		ret = snprintf((char *)(pDes), avaLen, fmt, ##__VA_ARGS__);\
-		if (ret < 0) { \
-			LOG_INF("snprintf fail(%d)\n", ret); \
-		} \
+			snprintf((char *)(pDes), avaLen, fmt, ##__VA_ARGS__);\
 			while (*ptr++ != '\0') {\
 				(*ptr2)++;\
 			} \
@@ -4068,13 +4066,17 @@ static signed int DPE_open(struct inode *pInode, struct file *pFile)
 
 	gDveCnt = 0;
 	/* Enable clock */
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 	__pm_stay_awake(&dpe_wake_lock);
+#else
+	wake_lock(&dpe_wake_lock);
 #endif
 	DPE_EnableClock(MTRUE);
 	g_u4DpeCnt = 0;
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 	__pm_relax(&dpe_wake_lock);
+#else
+	wake_unlock(&dpe_wake_lock);
 #endif
 
 	LOG_INF("DPE open g_u4EnableClockCount: %d", g_u4EnableClockCount);
@@ -4150,12 +4152,16 @@ static signed int DPE_release(struct inode *pInode, struct file *pFile)
 
 
 	/* Disable clock. */
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 	__pm_stay_awake(&dpe_wake_lock);
+#else
+	wake_lock(&dpe_wake_lock);
 #endif
 	DPE_EnableClock(MFALSE);
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 	__pm_relax(&dpe_wake_lock);
+#else
+	wake_unlock(&dpe_wake_lock);
 #endif
 	LOG_INF("DPE release g_u4EnableClockCount: %d", g_u4EnableClockCount);
 
@@ -4164,6 +4170,56 @@ EXIT:
 
 
 	LOG_DBG("- X. UserCount: %d.", DPEInfo.UserCount);
+	return 0;
+}
+
+
+/******************************************************************************
+ *
+ ******************************************************************************/
+static signed int DPE_mmap(struct file *pFile, struct vm_area_struct *pVma)
+{
+	unsigned long length = 0;
+	unsigned int pfn = 0x0;
+
+	length = pVma->vm_end - pVma->vm_start;
+	/*  */
+	pVma->vm_page_prot = pgprot_noncached(pVma->vm_page_prot);
+	pfn = pVma->vm_pgoff << PAGE_SHIFT;
+
+
+	LOG_INF("%s: pVma->vm_pgoff(0x%lx)",
+		__func__,
+		pVma->vm_pgoff);
+	LOG_INF("%s: pfn(0x%x),phy(0x%lx)",
+		__func__,
+		pfn,
+		pVma->vm_pgoff << PAGE_SHIFT);
+	LOG_INF("pVmapVma->vm_start(0x%lx)", pVma->vm_start);
+	LOG_INF("pVma->vm_end(0x%lx),length(0x%lx)", pVma->vm_end, length);
+
+	switch (pfn) {
+	case DPE_BASE_HW:
+		if (length > DPE_REG_RANGE) {
+			LOG_INF(
+			    "mmap range error :module:0x%x length(0x%lx),DPE_REG_RANGE(0x%x)!",
+			    pfn,
+			    length,
+			    DPE_REG_RANGE);
+			return -EAGAIN;
+		}
+		break;
+	default:
+		LOG_INF("Illegal starting HW addr for mmap!");
+		return -EAGAIN;
+	}
+	if (remap_pfn_range
+	    (pVma, pVma->vm_start, pVma->vm_pgoff,
+	     pVma->vm_end - pVma->vm_start,
+	     pVma->vm_page_prot)) {
+		return -EAGAIN;
+	}
+	/*  */
 	return 0;
 }
 
@@ -4180,7 +4236,7 @@ static const struct file_operations DPEFileOper = {
 	.open = DPE_open,
 	.release = DPE_release,
 	/* .flush   = mt_DPE_flush, */
-	/* .mmap = DPE_mmap, */
+	.mmap = DPE_mmap,
 	.unlocked_ioctl = DPE_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = DPE_ioctl_compat,
@@ -4406,8 +4462,11 @@ static signed int DPE_probe(struct platform_device *pDev)
 		for (n = 0; n < DPE_IRQ_TYPE_AMOUNT; n++)
 			spin_lock_init(&(DPEInfo.SpinLockIrq[n]));
 
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 		wakeup_source_init(&dpe_wake_lock, "dpe_lock_wakelock");
+#else
+		wake_lock_init(&dpe_wake_lock,
+				WAKE_LOCK_SUSPEND, "dpe_lock_wakelock");
 #endif
 		/*  */
 		init_waitqueue_head(&DPEInfo.WaitQueueHead);
@@ -4953,10 +5012,9 @@ static signed int __init DPE_Init(void)
 	void *tmp;
 	/* FIX-ME: linux-3.10 procfs API changed */
 	/* use proc_create */
-#if 0
 	struct proc_dir_entry *proc_entry;
 	struct proc_dir_entry *isp_dpe_dir;
-#endif
+
 
 	int i;
 	/*  */
@@ -4983,7 +5041,7 @@ static signed int __init DPE_Init(void)
 	}
 	LOG_DBG("ISP_DPE_BASE: %lx\n", ISP_DPE_BASE);
 #endif
-#if 0
+
 	isp_dpe_dir = proc_mkdir("dpe", NULL);
 	if (!isp_dpe_dir) {
 		LOG_INF("[%s]: fail to mkdir /proc/dpe\n", __func__);
@@ -4998,7 +5056,7 @@ static signed int __init DPE_Init(void)
 
 	proc_entry = proc_create("dpe_reg", 0644,
 		isp_dpe_dir, &dpe_reg_proc_fops);
-#endif
+
 
 	/* isr log */
 	if (PAGE_SIZE <

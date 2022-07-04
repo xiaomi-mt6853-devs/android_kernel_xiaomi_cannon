@@ -312,8 +312,6 @@ struct fdvt_config {
 	unsigned int FDVT_YUV2RGBCON_BUFSIZE;
 	unsigned int FDVT_FD_CON_BUFSIZE;
 	unsigned int FDVT_FD_POSE_CON_BUFSIZE;
-	unsigned int FDVT_LOOPS_OF_FDMODE;
-	unsigned int FDVT_NUMBERS_OF_PYRAMID;
 	struct FD_RESULT *FDOUTPUT;
 	struct ATTRIBUTE_RESULT *ATTRIBUTEOUTPUT;
 	struct POSE_RESULT *POSEOUTPUT;
