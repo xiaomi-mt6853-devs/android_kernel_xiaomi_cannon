@@ -88,7 +88,10 @@ unsigned int word_size_align(unsigned int in_size)
 {
 	unsigned int align_size;
 
-	/* MTK memif access need 16 bytes alignment */
+	/* sram is device memory,need word size align,
+	 * 8 byte for 64 bit platform
+	 * [3:0] = 4'h0 for the convenience of the hardware implementation
+	 */
 	align_size = in_size & 0xFFFFFFF0;
 	return align_size;
 }

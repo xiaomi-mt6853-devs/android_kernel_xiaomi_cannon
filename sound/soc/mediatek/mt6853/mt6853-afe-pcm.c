@@ -34,14 +34,9 @@
 
 #if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP)
 #include "../audio_dsp/mtk-dsp-common.h"
-#include <adsp_core.h>
 #endif
 #if defined(CONFIG_SND_SOC_MTK_SCP_SMARTPA)
 #include "../scp_spk/mtk-scp-spk-common.h"
-#endif
-
-#if defined(CONFIG_MTK_ULTRASND_PROXIMITY)
-#include "../scp_ultra/mtk-scp-ultra-common.h"
 #endif
 
 /* FORCE_FPGA_ENABLE_IRQ use irq in fpga */
@@ -138,7 +133,7 @@ int mt6853_fe_trigger(struct snd_pcm_substream *substream, int cmd,
 	unsigned int counter = runtime->period_size;
 	unsigned int rate = runtime->rate;
 	int fs;
-	int ret = 0;
+	int ret;
 
 	dev_info(afe->dev, "%s(), %s cmd %d, irq_id %d\n",
 		 __func__, memif->data->name, cmd, irq_id);
@@ -146,20 +141,20 @@ int mt6853_fe_trigger(struct snd_pcm_substream *substream, int cmd,
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
-		/* set memif enable */
-		if (memif->vow_bargein_enable)
-			/* memif will be set by scp */
+#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP) ||\
+	defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
+		/* with dsp enable, not to set when stop_threshold = ~(0U) */
+		if (runtime->stop_threshold == ~(0U))
 			ret = 0;
 		else
-#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP)
-			/* with dsp enable, not to set when stop_threshold = ~(0U) */
-			if (runtime->stop_threshold == ~(0U))
-				ret = 0;
-			else
-				/* only when adsp enable using hw semaphore to set memif */
-				ret = mtk_dsp_memif_set_enable(afe, id);
+/* only when adsp enable using hw semaphore to set memif */
+#if defined(CONFIG_MTK_AUDIODSP_SUPPORT)
+			ret = mtk_dsp_memif_set_enable(afe, id);
 #else
 			ret = mtk_memif_set_enable(afe, id);
+#endif
+#else
+		ret = mtk_memif_set_enable(afe, id);
 #endif
 
 		/*
@@ -196,19 +191,18 @@ int mt6853_fe_trigger(struct snd_pcm_substream *substream, int cmd,
 				       irq_data->irq_fs_maskbit
 				       << irq_data->irq_fs_shift,
 				       fs << irq_data->irq_fs_shift);
-
 		/* enable interrupt */
-		/* barge-in set stop_threshold == ~(0U), interrupt is set by scp */
+#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP) ||\
+	defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
 		if (runtime->stop_threshold != ~(0U))
-#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP)
 			mtk_dsp_irq_set_enable(afe, irq_data);
 #else
+		if (runtime->stop_threshold != ~(0U))
 			mtk_regmap_update_bits(afe->regmap,
 					       irq_data->irq_en_reg,
 					       1 << irq_data->irq_en_shift,
 					       1 << irq_data->irq_en_shift);
 #endif
-
 		return 0;
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
@@ -223,16 +217,19 @@ int mt6853_fe_trigger(struct snd_pcm_substream *substream, int cmd,
 				}
 			}
 		}
-
-		/* set memif disable */
-#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP)
-		if (runtime->stop_threshold != ~(0U) || (!is_adsp_system_running()) ||
-		    mtk_audio_get_adsp_reset_status())
+#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP) ||\
+	defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
+		if (runtime->stop_threshold == ~(0U))
+			ret = 0;
+		else
+/* only when adsp enable using hw semaphore to set memif */
+#if defined(CONFIG_MTK_AUDIODSP_SUPPORT)
 			ret = mtk_dsp_memif_set_disable(afe, id);
 #else
-		/* barge-in set stop_threshold == ~(0U), memif is set by scp */
-		if (runtime->stop_threshold != ~(0U))
 			ret = mtk_memif_set_disable(afe, id);
+#endif
+#else
+		ret = mtk_memif_set_disable(afe, id);
 #endif
 		if (ret) {
 			dev_err(afe->dev, "%s(), error, id %d, memif enable, ret %d\n",
@@ -240,21 +237,21 @@ int mt6853_fe_trigger(struct snd_pcm_substream *substream, int cmd,
 		}
 
 		/* disable interrupt */
-#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP)
-		if (runtime->stop_threshold != ~(0U) || (!is_adsp_system_running()) ||
-			mtk_audio_get_adsp_reset_status())
+#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP) ||\
+	defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
+		if (runtime->stop_threshold != ~(0U))
 			mtk_dsp_irq_set_disable(afe, irq_data);
 #else
-		/* barge-in set stop_threshold == ~(0U), interrupt is set by scp */
 		if (runtime->stop_threshold != ~(0U))
 			mtk_regmap_update_bits(afe->regmap,
 					       irq_data->irq_en_reg,
 					       1 << irq_data->irq_en_shift,
 					       0 << irq_data->irq_en_shift);
+
 #endif
-		/* clear pending IRQ */
-#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP) || defined(CONFIG_MTK_VOW_SUPPORT)
-		/* TODO: check memif->vow_barge_in_enable */
+		/* and clear pending IRQ */
+#if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP) ||\
+	defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
 		if (runtime->stop_threshold != ~(0U))
 #endif
 			regmap_write(afe->regmap, irq_data->irq_clr_reg,
@@ -1026,6 +1023,7 @@ static int mt6853_sram_size_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+#if defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
 static int mt6853_vow_barge_in_irq_id_get(struct snd_kcontrol *kcontrol,
 					  struct snd_ctl_elem_value *ucontrol)
 {
@@ -1038,6 +1036,7 @@ static int mt6853_vow_barge_in_irq_id_get(struct snd_kcontrol *kcontrol,
 	ucontrol->value.integer.value[0] = irq_id;
 	return 0;
 }
+#endif
 
 #if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP)
 static int mt6853_adsp_ref_mem_get(struct snd_kcontrol *kcontrol,
@@ -1096,7 +1095,6 @@ static int mt6853_adsp_mem_get(struct snd_kcontrol *kcontrol,
 					      ADSP_TASK_ATTR_MEMDL);
 		break;
 	case AUDIO_TASK_CAPTURE_UL1_ID:
-	case AUDIO_TASK_FM_ADSP_ID:
 		memif_num = get_dsp_task_attr(task_id,
 					      ADSP_TASK_ATTR_MEMUL);
 		break;
@@ -1136,7 +1134,6 @@ static int mt6853_adsp_mem_set(struct snd_kcontrol *kcontrol,
 						 ADSP_TASK_ATTR_MEMDL);
 		break;
 	case AUDIO_TASK_CAPTURE_UL1_ID:
-	case AUDIO_TASK_FM_ADSP_ID:
 		ul_memif_num = get_dsp_task_attr(task_id,
 						 ADSP_TASK_ATTR_MEMUL);
 		break;
@@ -1337,8 +1334,10 @@ static const struct snd_kcontrol_new mt6853_pcm_kcontrols[] = {
 		       mt6853_voip_scene_get, mt6853_voip_scene_set),
 	SOC_SINGLE_EXT("sram_size", SND_SOC_NOPM, 0, 0xffffffff, 0,
 		       mt6853_sram_size_get, NULL),
+#if defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
 	SOC_SINGLE_EXT("vow_barge_in_irq_id", SND_SOC_NOPM, 0, 0x3ffff, 0,
 		       mt6853_vow_barge_in_irq_id_get, NULL),
+#endif
 #if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP)
 	SOC_SINGLE_EXT("adsp_primary_sharemem_scenario",
 		       SND_SOC_NOPM, 0, 0x1, 0,
@@ -1361,10 +1360,6 @@ static const struct snd_kcontrol_new mt6853_pcm_kcontrols[] = {
 		       mt6853_adsp_mem_get,
 		       mt6853_adsp_mem_set),
 	SOC_SINGLE_EXT("adsp_ktv_sharemem_scenario",
-		       SND_SOC_NOPM, 0, 0x1, 0,
-		       mt6853_adsp_mem_get,
-		       mt6853_adsp_mem_set),
-	SOC_SINGLE_EXT("adsp_fm_sharemem_scenario",
 		       SND_SOC_NOPM, 0, 0x1, 0,
 		       mt6853_adsp_mem_get,
 		       mt6853_adsp_mem_set),
@@ -1507,8 +1502,6 @@ static const struct snd_kcontrol_new memif_ul2_ch1_mix[] = {
 				    I_DL5_CH1, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("DL6_CH1", AFE_CONN5_1,
 				    I_DL6_CH1, 1, 0),
-	SOC_DAPM_SINGLE_AUTODISABLE("DL7_CH1", AFE_CONN5_1,
-				    I_DL7_CH1, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("PCM_1_CAP_CH1", AFE_CONN5,
 				    I_PCM_1_CAP_CH1, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("PCM_2_CAP_CH1", AFE_CONN5,
@@ -1538,8 +1531,6 @@ static const struct snd_kcontrol_new memif_ul2_ch2_mix[] = {
 				    I_DL5_CH2, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("DL6_CH2", AFE_CONN6_1,
 				    I_DL6_CH2, 1, 0),
-	SOC_DAPM_SINGLE_AUTODISABLE("DL7_CH2", AFE_CONN6_1,
-				    I_DL7_CH2, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("PCM_1_CAP_CH1", AFE_CONN6,
 				    I_PCM_1_CAP_CH1, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("PCM_2_CAP_CH1", AFE_CONN6,
@@ -1609,8 +1600,6 @@ static const struct snd_kcontrol_new memif_ul6_ch1_mix[] = {
 				    I_PCM_1_CAP_CH1, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("PCM_2_CAP_CH1", AFE_CONN46,
 				    I_PCM_2_CAP_CH1, 1, 0),
-	SOC_DAPM_SINGLE_AUTODISABLE("GAIN1_OUT_CH1", AFE_CONN46,
-				    I_GAIN1_OUT_CH1, 1, 0),
 };
 
 static const struct snd_kcontrol_new memif_ul6_ch2_mix[] = {
@@ -1632,8 +1621,6 @@ static const struct snd_kcontrol_new memif_ul6_ch2_mix[] = {
 				    I_PCM_1_CAP_CH1, 1, 0),
 	SOC_DAPM_SINGLE_AUTODISABLE("PCM_2_CAP_CH1", AFE_CONN47,
 				    I_PCM_2_CAP_CH1, 1, 0),
-	SOC_DAPM_SINGLE_AUTODISABLE("GAIN1_OUT_CH2", AFE_CONN47,
-				    I_GAIN1_OUT_CH2, 1, 0),
 };
 
 static const struct snd_kcontrol_new memif_ul7_ch1_mix[] = {
@@ -1842,8 +1829,6 @@ static const struct snd_soc_dapm_route mt6853_memif_routes[] = {
 	{"UL2_CH2", "DL4_CH2", "Hostless_UL2 UL"},
 	{"UL2_CH1", "DL5_CH1", "Hostless_UL2 UL"},
 	{"UL2_CH2", "DL5_CH2", "Hostless_UL2 UL"},
-	{"UL2_CH1", "DL7_CH1", "Hostless_UL2 UL"},
-	{"UL2_CH2", "DL7_CH2", "Hostless_UL2 UL"},
 
 	{"Hostless_UL2 UL", NULL, "UL2_VIRTUAL_INPUT"},
 
@@ -1916,8 +1901,6 @@ static const struct snd_soc_dapm_route mt6853_memif_routes[] = {
 	{"UL6_CH2", "PCM_1_CAP_CH1", "PCM 1 Capture"},
 	{"UL6_CH1", "PCM_2_CAP_CH1", "PCM 2 Capture"},
 	{"UL6_CH2", "PCM_2_CAP_CH1", "PCM 2 Capture"},
-	{"UL6_CH1", "GAIN1_OUT_CH1", "HW Gain 1 Out"},
-	{"UL6_CH2", "GAIN1_OUT_CH2", "HW Gain 1 Out"},
 
 	{"UL7", NULL, "UL7_CH1"},
 	{"UL7", NULL, "UL7_CH2"},
@@ -2511,8 +2494,8 @@ static const struct mtk_base_memif_data memif_data[MT6853_MEMIF_NUM] = {
 		.fs_maskbit = -1,
 		.mono_reg = -1,
 		.mono_shift = -1,
-		.enable_reg = AFE_DAC_CON0,
-		.enable_shift = HDMI_OUT_ON_SFT,
+		.enable_reg = -1,	/* control in tdm for sync start */
+		.enable_shift = -1,
 		.hd_reg = AFE_HDMI_OUT_CON0,
 		.hd_shift = HDMI_OUT_HD_MODE_SFT,
 		.agent_disable_reg = -1,
@@ -6082,7 +6065,6 @@ static int mt6853_afe_pcm_dev_probe(struct platform_device *pdev)
 		return ret;
 
 	/* init memif */
-	afe->memif_32bit_supported = 1;
 	afe->memif_size = MT6853_MEMIF_NUM;
 	afe->memif = devm_kcalloc(dev, afe->memif_size, sizeof(*afe->memif),
 				  GFP_KERNEL);
@@ -6195,10 +6177,6 @@ static int mt6853_afe_pcm_dev_probe(struct platform_device *pdev)
 #if defined(CONFIG_SND_SOC_MTK_AUDIO_DSP) ||\
 	defined(CONFIG_SND_SOC_MTK_SCP_SMARTPA)
 	audio_set_dsp_afe(afe);
-#endif
-
-#if defined(CONFIG_MTK_ULTRASND_PROXIMITY)
-	ultra_set_afe_base(afe);
 #endif
 
 	return 0;

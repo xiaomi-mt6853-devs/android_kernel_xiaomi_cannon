@@ -23,8 +23,9 @@
 
 #include "mtk-afe-fe-dai.h"
 #include "mtk-base-afe.h"
+#if defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
 #include "../scp_vow/mtk-scp-vow-common.h"
-#include "mtk-sp-common.h"
+#endif
 
 #if defined(CONFIG_MTK_ION)
 #include "mtk-mmap-ion.h"
@@ -44,35 +45,11 @@
 #include "adsp_helper.h"
 #endif
 
-#if defined(CONFIG_MTK_TINYSYS_SCP_SUPPORT)
-#include <scp_helper.h>
-#endif
-
 #if defined(CONFIG_SND_SOC_MTK_SCP_SMARTPA)
 #include "../scp_spk/mtk-scp-spk-mem-control.h"
 #endif
 
-#if defined(CONFIG_MTK_ULTRASND_PROXIMITY)
-#include "../scp_ultra/mtk-scp-ultra-mem-control.h"
-#endif
-
 #define AFE_BASE_END_OFFSET 8
-
-static bool is_semaphore_control_need(bool is_scp_sema_support)
-{
-	bool is_adsp_active = false;
-
-#if defined(CONFIG_MTK_AUDIODSP_SUPPORT)
-	is_adsp_active = is_adsp_feature_in_active();
-#endif
-
-	/* If is_scp_sema_support is true,
-	 * scp semaphore is to ensure AP/SCP/ADSP synchronization.
-	 * Otherwise, using adsp semaphore for synchronization
-	 * if adsp feature is active.
-	 */
-	return is_scp_sema_support | is_adsp_active;
-}
 
 int mtk_regmap_update_bits(struct regmap *map, int reg,
 			   unsigned int mask,
@@ -232,7 +209,7 @@ int mtk_afe_fe_hw_params(struct snd_pcm_substream *substream,
 
 	substream->runtime->dma_bytes = params_buffer_bytes(params);
 
-#if defined(CONFIG_MTK_VOW_SUPPORT)
+#if defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT)
 	if (memif->vow_bargein_enable) {
 		ret = allocate_vow_bargein_mem(substream,
 					       &substream->runtime->dma_addr,
@@ -240,7 +217,6 @@ int mtk_afe_fe_hw_params(struct snd_pcm_substream *substream,
 					       substream->runtime->dma_bytes,
 					       params_format(params),
 					       afe);
-
 		if (ret < 0)
 			return ret;
 
@@ -256,21 +232,6 @@ int mtk_afe_fe_hw_params(struct snd_pcm_substream *substream,
 					       substream->runtime->dma_bytes,
 					       params_format(params),
 					       afe);
-		if (ret < 0)
-			return ret;
-
-		goto BYPASS_AFE_FE_ALLOCATE_MEM;
-	}
-#endif
-
-#if defined(CONFIG_MTK_ULTRASND_PROXIMITY)
-	if (memif->scp_ultra_enable) {
-		ret = mtk_scp_ultra_allocate_mem(substream,
-						 &substream->runtime->dma_addr,
-						 &substream->runtime->dma_area,
-						 substream->runtime->dma_bytes,
-						 params_format(params),
-						 afe);
 		if (ret < 0)
 			return ret;
 
@@ -351,12 +312,10 @@ END:
 		return ret;
 	}
 
-#if defined(CONFIG_MTK_VOW_SUPPORT) ||\
-		defined(CONFIG_SND_SOC_MTK_SCP_SMARTPA) ||\
-		defined(CONFIG_MTK_ULTRASND_PROXIMITY)
+#if defined(CONFIG_MTK_VOW_BARGE_IN_SUPPORT) ||\
+	defined(CONFIG_SND_SOC_MTK_SCP_SMARTPA)
 BYPASS_AFE_FE_ALLOCATE_MEM:
 #endif
-
 	/* set channel */
 	ret = mtk_memif_set_channel(afe, id, channels);
 	if (ret) {
@@ -409,11 +368,6 @@ int mtk_afe_fe_hw_free(struct snd_pcm_substream *substream,
 	if (memif->scp_spk_enable)
 		return mtk_scp_spk_free_mem(substream, afe);
 #endif
-#if defined(CONFIG_MTK_ULTRASND_PROXIMITY)
-	if (memif->scp_ultra_enable)
-		return mtk_scp_ultra_free_mem(substream, afe);
-#endif
-
 	if (memif->using_sram) {
 		memif->using_sram = 0;
 		return mtk_audio_sram_free(afe->sram, substream);
@@ -462,7 +416,7 @@ int mtk_afe_fe_trigger(struct snd_pcm_substream *substream, int cmd,
 	const struct mtk_base_irq_data *irq_data = irqs->irq_data;
 	unsigned int counter = runtime->period_size;
 	int fs;
-	int ret = 0;
+	int ret;
 
 	dev_dbg(afe->dev, "%s(), %s, cmd %d\n",
 		__func__, memif->data->name, cmd);
@@ -667,55 +621,41 @@ int mtk_memif_set_disable(struct mtk_base_afe *afe, int id)
 }
 EXPORT_SYMBOL_GPL(mtk_memif_set_disable);
 
-
+#if defined(CONFIG_MTK_AUDIODSP_SUPPORT)
 int mtk_dsp_memif_set_enable(struct mtk_base_afe *afe, int id)
 {
-	int ret = 0;
-	int adsp_sem_ret = 0;
+	int ret = 0, adsp_sem_ret = 0;
 
-	if (!afe)
-		return -EPERM;
-
-	if (!is_semaphore_control_need(afe->is_scp_sema_support))
-		return mtk_memif_set_enable(afe, id);
-
-	adsp_sem_ret = AUDREG_SEMA_3WAY_GET(afe->is_scp_sema_support);
-	if (adsp_sem_ret) {
-		pr_info("%s() error adsp_sem_ret: %d, is_scp_sema_support: %d\n",
-			__func__, adsp_sem_ret, afe->is_scp_sema_support);
-		return -EBUSY;
+	adsp_sem_ret = get_adsp_semaphore(SEMA_AUDIOREG);
+	/* get sem ok*/
+	if (!adsp_sem_ret) {
+		ret = mtk_memif_set_enable(afe, id);
+		release_adsp_semaphore(SEMA_AUDIOREG);
+	} else {
+		if (adsp_sem_ret == ADSP_SEMAPHORE_BUSY)
+			pr_info("%s adsp_sem_ret[%d]\n",
+				__func__, adsp_sem_ret);
+		ret = mtk_memif_set_enable(afe, id);
 	}
-
-	ret = mtk_memif_set_enable(afe, id);
-
-	AUDREG_SEMA_3WAY_RELEASE(afe->is_scp_sema_support);
-
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mtk_dsp_memif_set_enable);
 
 int mtk_dsp_memif_set_disable(struct mtk_base_afe *afe, int id)
 {
-	int ret = 0;
-	int adsp_sem_ret = 0;
+	int ret = 0, adsp_sem_ret = 0;
 
-	if (!afe)
-		return -EPERM;
-
-	if (!is_semaphore_control_need(afe->is_scp_sema_support))
-		return mtk_memif_set_disable(afe, id);
-
-	adsp_sem_ret = AUDREG_SEMA_3WAY_GET(afe->is_scp_sema_support);
-	if (adsp_sem_ret) {
-		pr_info("%s() error adsp_sem_ret: %d, is_scp_sema_support: %d\n",
-			__func__, adsp_sem_ret, afe->is_scp_sema_support);
-		return -EBUSY;
+	adsp_sem_ret = get_adsp_semaphore(SEMA_AUDIOREG);
+	/* get sem ok*/
+	if (!adsp_sem_ret) {
+		ret = mtk_memif_set_disable(afe, id);
+		release_adsp_semaphore(SEMA_AUDIOREG);
+	} else {
+		if (adsp_sem_ret == ADSP_SEMAPHORE_BUSY)
+			pr_info("%s adsp_sem_ret[%d]\n",
+				__func__, adsp_sem_ret);
+		ret = mtk_memif_set_disable(afe, id);
 	}
-
-	ret = mtk_memif_set_disable(afe, id);
-
-	AUDREG_SEMA_3WAY_RELEASE(afe->is_scp_sema_support);
-
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mtk_dsp_memif_set_disable);
@@ -724,31 +664,28 @@ EXPORT_SYMBOL_GPL(mtk_dsp_memif_set_disable);
 int mtk_dsp_irq_set_enable(struct mtk_base_afe *afe,
 			   const struct mtk_base_irq_data *irq_data)
 {
-	int ret = 0;
-	int adsp_sem_ret = 0;
+	int ret = 0, adsp_sem_ret = 0;
 
 	if (!afe)
 		return -EPERM;
 	if (!irq_data)
 		return -EPERM;
 
-	if (!is_semaphore_control_need(afe->is_scp_sema_support))
-		return regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
-					  1 << irq_data->irq_en_shift,
-					  1 << irq_data->irq_en_shift);
-
-	adsp_sem_ret = AUDREG_SEMA_3WAY_GET(afe->is_scp_sema_support);
-	if (adsp_sem_ret) {
-		pr_info("%s() error adsp_sem_ret: %d, is_scp_sema_support: %d\n",
-			__func__, adsp_sem_ret, afe->is_scp_sema_support);
-		return -EBUSY;
+	adsp_sem_ret = get_adsp_semaphore(SEMA_AUDIOREG);
+	/* get sem ok*/
+	if (!adsp_sem_ret) {
+		regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
+				   1 << irq_data->irq_en_shift,
+				   1 << irq_data->irq_en_shift);
+		release_adsp_semaphore(SEMA_AUDIOREG);
+	} else {
+		if (adsp_sem_ret == ADSP_SEMAPHORE_BUSY)
+			pr_info("%s adsp_sem_ret[%d]\n",
+				__func__, adsp_sem_ret);
+		regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
+				   1 << irq_data->irq_en_shift,
+				   1 << irq_data->irq_en_shift);
 	}
-
-	regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
-			   1 << irq_data->irq_en_shift,
-			   1 << irq_data->irq_en_shift);
-	AUDREG_SEMA_3WAY_RELEASE(afe->is_scp_sema_support);
-
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mtk_dsp_irq_set_enable);
@@ -756,34 +693,34 @@ EXPORT_SYMBOL_GPL(mtk_dsp_irq_set_enable);
 int mtk_dsp_irq_set_disable(struct mtk_base_afe *afe,
 			    const struct mtk_base_irq_data *irq_data)
 {
-	int ret = 0;
-	int adsp_sem_ret = 0;
+	int ret = 0, adsp_sem_ret = 0;
 
 	if (!afe)
 		return -EPERM;
 	if (!irq_data)
 		return -EPERM;
 
-	if (!is_semaphore_control_need(afe->is_scp_sema_support))
-		return regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
-					  1 << irq_data->irq_en_shift,
-					  0 << irq_data->irq_en_shift);
+	adsp_sem_ret = get_adsp_semaphore(SEMA_AUDIOREG);
 
-	adsp_sem_ret = AUDREG_SEMA_3WAY_GET(afe->is_scp_sema_support);
-	if (adsp_sem_ret) {
-		pr_info("%s() error adsp_sem_ret: %d, is_scp_sema_support: %d\n",
-			__func__, adsp_sem_ret, afe->is_scp_sema_support);
-		return -EBUSY;
+	/* get sem ok*/
+	if (!adsp_sem_ret) {
+		regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
+				   1 << irq_data->irq_en_shift,
+				   0 << irq_data->irq_en_shift);
+		release_adsp_semaphore(SEMA_AUDIOREG);
+	} else {
+		if (adsp_sem_ret == ADSP_SEMAPHORE_BUSY)
+			pr_info("%s adsp_sem_ret[%d]\n",
+				__func__, adsp_sem_ret);
+		regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
+				   1 << irq_data->irq_en_shift,
+				   0 << irq_data->irq_en_shift);
 	}
-
-	regmap_update_bits(afe->regmap, irq_data->irq_en_reg,
-			   1 << irq_data->irq_en_shift,
-			   0 << irq_data->irq_en_shift);
-	AUDREG_SEMA_3WAY_RELEASE(afe->is_scp_sema_support);
-
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mtk_dsp_irq_set_disable);
+
+#endif
 
 int mtk_memif_set_addr(struct mtk_base_afe *afe, int id,
 		       unsigned char *dma_area,

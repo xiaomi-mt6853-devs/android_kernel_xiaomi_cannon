@@ -100,7 +100,6 @@ snd-soc-msm8916-analog-objs := msm8916-wcd-analog.o
 snd-soc-msm8916-digital-objs := msm8916-wcd-digital.o
 snd-soc-mt6358-objs := mt6358.o
 snd-soc-mt6359-objs := mt6359.o
-snd-soc-mt6366-objs := mt6358.o
 snd-soc-mt6392-codec-objs := mt6392-codec.o
 snd-soc-mt8167-codec-objs := mt8167-codec.o mt8167-codec-utils.o
 snd-soc-nau8540-objs := nau8540.o
@@ -239,18 +238,15 @@ snd-soc-wm9713-objs := wm9713.o
 snd-soc-wm-hubs-objs := wm_hubs.o
 snd-soc-zx-aud96p22-objs := zx_aud96p22.o
 snd-soc-rt5509-objs := rt5509.o rt5509-regmap.o rt5509-calib.o
-snd-soc-rt5512-objs := rt5512.o
 
 # Amp
-snd-soc-mt6660-objs := mt6660.o mt6660-regmap.o
+snd-soc-mt6660-objs := mt6660.o mt6660-regmap.o mt6660-param.o
 snd-soc-dio2125-objs := dio2125.o
 snd-soc-max9877-objs := max9877.o
 snd-soc-max98504-objs := max98504.o
 snd-soc-tpa6130a2-objs := tpa6130a2.o
 snd-soc-tas2552-objs := tas2552.o
-snd-soc-smartpa-info-objs := smartpa-info.o
 
-obj-$(CONFIG_SND_RICHTEK_SPM)   += richtek_spm_cls.o
 obj-$(CONFIG_SND_SOC_88PM860X)	+= snd-soc-88pm860x.o
 obj-$(CONFIG_SND_SOC_AB8500_CODEC)	+= snd-soc-ab8500-codec.o
 obj-$(CONFIG_SND_SOC_AC97_CODEC)	+= snd-soc-ac97.o
@@ -352,7 +348,6 @@ obj-$(CONFIG_SND_SOC_MSM8916_WCD_ANALOG) +=snd-soc-msm8916-analog.o
 obj-$(CONFIG_SND_SOC_MSM8916_WCD_DIGITAL) +=snd-soc-msm8916-digital.o
 obj-$(CONFIG_SND_SOC_MT6358)	+= snd-soc-mt6358.o
 obj-$(CONFIG_SND_SOC_MT6359)	+= snd-soc-mt6359.o
-obj-$(CONFIG_SND_SOC_MT6366)	+= snd-soc-mt6366.o
 obj-$(CONFIG_SND_SOC_MT6392_CODEC)	+= snd-soc-mt6392-codec.o
 obj-$(CONFIG_SND_SOC_MT8167_CODEC)	+= snd-soc-mt8167-codec.o
 obj-$(CONFIG_SND_SOC_NAU8540)   += snd-soc-nau8540.o
@@ -486,10 +481,13 @@ obj-$(CONFIG_SND_SOC_WM9090)	+= snd-soc-wm9090.o
 obj-$(CONFIG_SND_SOC_WM9705)	+= snd-soc-wm9705.o
 obj-$(CONFIG_SND_SOC_WM9712)	+= snd-soc-wm9712.o
 obj-$(CONFIG_SND_SOC_WM9713)	+= snd-soc-wm9713.o
-obj-$(CONFIG_SND_SOC_WM_ADSP)	+= snd-soc-wm-adsp.o
+#obj-$(CONFIG_SND_SOC_WM_ADSP)	+= snd-soc-wm-adsp.o
 obj-$(CONFIG_SND_SOC_WM_HUBS)	+= snd-soc-wm-hubs.o
 obj-$(CONFIG_SND_SOC_ZX_AUD96P22) += snd-soc-zx-aud96p22.o
 obj-$(CONFIG_SND_SOC_TFA9874)	+= tfa98xx/
+obj-$(CONFIG_SND_SOC_CS35L41)	+= cs35l41/
+obj-$(CONFIG_SND_SOC_AW87359)	+= aw87359/
+obj-$(CONFIG_SND_SOC_AW87519)	+= aw87519/
 
 # Amp
 obj-$(CONFIG_SND_SOC_DIO2125)	+= snd-soc-dio2125.o
@@ -497,14 +495,13 @@ obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_MAX98504)	+= snd-soc-max98504.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
 obj-$(CONFIG_SND_SOC_RT5509)	+= snd-soc-rt5509.o
-obj-$(CONFIG_SND_SOC_RT5512)	+= snd-soc-rt5512.o
 obj-$(CONFIG_SND_SOC_MT6660)	+= snd-soc-mt6660.o
-obj-$(CONFIG_SND_SOC_SMARTPAINFO)	+= snd-soc-smartpa-info.o
 obj-$(CONFIG_SND_SOC_AW87339)	+= aw87339/
-obj-$(CONFIG_SND_SOC_AS33970)	+= as33970/
-obj-$(CONFIG_SND_SOC_CS35L41)	+= cs35l41/
+# Begonia Audio SmartPA Begin
+obj-$(CONFIG_SND_SOC_TFA9874)	+= tfa98xx/
+# Begonia Audio SmartPA End
 
-ifneq (, $(filter y,$(CONFIG_SND_SOC_MT6358) $(CONFIG_SND_SOC_MT6366)))
+ifeq ($(CONFIG_SND_SOC_MT6358),y)
   MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
   subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
   subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/accdet/mt6358

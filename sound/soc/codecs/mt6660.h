@@ -19,7 +19,6 @@
 
 #include <linux/mutex.h>
 #include <mt-plat/rt-regmap.h>
-#include "richtek_spm_cls.h"
 
 struct mt6660_chip {
 	struct i2c_client *i2c;
@@ -27,7 +26,6 @@ struct mt6660_chip {
 	struct snd_soc_codec *codec;
 	struct platform_device *param_dev;
 	struct rt_regmap_device *regmap;
-	struct richtek_spm_classdev spm;
 	struct mutex var_lock;
 	u16 chip_rev;
 	u8 dev_cnt;
