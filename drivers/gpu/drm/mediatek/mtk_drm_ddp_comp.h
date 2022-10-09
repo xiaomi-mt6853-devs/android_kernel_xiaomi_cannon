@@ -344,6 +344,8 @@ struct mtk_ddp_comp {
 	u32 qos_bw;
 	u32 fbdc_bw;
 	u32 hrt_bw;
+
+	struct mutex panel_lock;
 };
 
 static inline void mtk_ddp_comp_config(struct mtk_ddp_comp *comp,
