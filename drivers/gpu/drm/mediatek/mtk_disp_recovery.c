@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2019 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -39,7 +40,8 @@
 #include "mtk_drm_trace.h"
 
 #define ESD_TRY_CNT 5
-#define ESD_CHECK_PERIOD 2000 /* ms */
+#define ESD_CHECK_PERIOD 10 /* ms */
+#define MTK_DRM_ESD_CHECK 0
 
 /* pinctrl implementation */
 long _set_state(struct drm_crtc *crtc, const char *name)
@@ -406,6 +408,13 @@ done:
 	return ret;
 }
 
+static atomic_t panel_dead;
+
+int get_panel_dead_flag(void) {
+	return atomic_read(&panel_dead);
+}
+EXPORT_SYMBOL(get_panel_dead_flag);
+
 static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
@@ -503,10 +512,7 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 		msleep(ESD_CHECK_PERIOD);
 		ret = wait_event_interruptible(
 			esd_ctx->check_task_wq,
-			atomic_read(&esd_ctx->check_wakeup) &&
-			(atomic_read(&esd_ctx->target_time) ||
-			(panel_ext->params->cust_esd_check == 0) &&
-			 (esd_ctx->chk_mode == READ_EINT)));
+			atomic_read(&esd_ctx->check_wakeup));
 		if (ret < 0) {
 			DDPINFO("[ESD]check thread waked up accidently\n");
 			continue;
@@ -514,9 +520,6 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 
 		mutex_lock(&private->commit.lock);
 		DDP_MUTEX_LOCK(&mtk_crtc->lock, __func__, __LINE__);
-		mtk_drm_trace_begin("esd");
-		if (!mtk_drm_is_idle(crtc))
-			atomic_set(&esd_ctx->target_time, 0);
 
 		/* 1. esd check & recovery */
 		if (!esd_ctx->chk_active) {
@@ -556,6 +559,47 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 		mutex_unlock(&private->commit.lock);
 
 		/* 2. other check & recovery */
+		if (kthread_should_stop())
+			break;
+	}
+	return 0;
+}
+
+static int mtk_drm_esd_recovery_check_worker_kthread(void *data)
+{
+	struct sched_param param = { .sched_priority = 87 };
+	struct drm_crtc *crtc = (struct drm_crtc *)data;
+	struct mtk_drm_private *private = crtc->dev->dev_private;
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	struct mtk_drm_esd_ctx *esd_ctx = mtk_crtc->esd_ctx;
+	int ret = 0;
+
+	sched_setscheduler(current, SCHED_RR, &param);
+
+	while (1) {
+		msleep(ESD_CHECK_PERIOD); /* 10ms */
+		ret = wait_event_interruptible(esd_ctx->ext_te_wq,
+					atomic_read(&esd_ctx->ext_te_event));
+		if (ret < 0) {
+			DDPMSG("[ESD]check thread waked up accidently\n");
+			continue;
+		}
+
+		DDPMSG("[ESD]check thread waked up successfully\n");
+		mutex_lock(&private->commit.lock);
+		DDP_MUTEX_LOCK(&mtk_crtc->lock, __func__, __LINE__);
+
+		/* 1.esd recovery */
+		mtk_drm_esd_recover(crtc);
+
+		/* 2.clear atomic  ext_te_event */
+		atomic_set(&esd_ctx->ext_te_event, 0);
+
+		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
+		mutex_unlock(&private->commit.lock);
+		DDPMSG("[ESD]check thread is over\n");
+
+		/* 3.other check & recovery */
 		if (kthread_should_stop())
 			break;
 	}
@@ -626,18 +670,20 @@ static void mtk_disp_esd_chk_init(struct drm_crtc *crtc)
 	}
 	mtk_crtc->esd_ctx = esd_ctx;
 
+	if (MTK_DRM_ESD_CHECK) {
 	esd_ctx->disp_esd_chk_task = kthread_create(
 		mtk_drm_esd_check_worker_kthread, crtc, "disp_echk");
+	}
+	else {
+		esd_ctx->disp_esd_chk_task = kthread_create(
+			mtk_drm_esd_recovery_check_worker_kthread, crtc, "disp_esd_check");
+	}
 
 	init_waitqueue_head(&esd_ctx->check_task_wq);
 	init_waitqueue_head(&esd_ctx->ext_te_wq);
 	atomic_set(&esd_ctx->check_wakeup, 0);
 	atomic_set(&esd_ctx->ext_te_event, 0);
-	atomic_set(&esd_ctx->target_time, 0);
-	if (panel_ext->params->cust_esd_check == 1)
-		esd_ctx->chk_mode = READ_LCM;
-	else
-		esd_ctx->chk_mode = READ_EINT;
+	esd_ctx->chk_mode = READ_EINT;
 	mtk_drm_request_eint(crtc);
 
 	wake_up_process(esd_ctx->disp_esd_chk_task);
