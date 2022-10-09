@@ -1394,6 +1394,26 @@ int mtk_dprec_mmp_dump_ovl_layer(struct mtk_plane_state *plane_state)
 	return -1;
 }
 
+void mtk_drm_idlemgr_kick_ext(const char *source)
+{
+	struct drm_crtc *crtc;
+
+	DDPINFO("%s +\n", __func__);
+
+	/* This cmd only for crtc0 */
+	crtc = list_first_entry(&(drm_dev)->mode_config.crtc_list,
+			typeof(*crtc), head);
+
+	if (!crtc) {
+		DDPPR_ERR("find crtc fail\n");
+		return;
+	}
+
+	mtk_drm_idlemgr_kick(source, crtc, 1);
+
+	DDPINFO("%s -\n", __func__);
+}
+
 int mtk_dprec_mmp_dump_cwb_buffer(struct drm_crtc *crtc,
 		void *buffer, unsigned int buf_idx)
 {

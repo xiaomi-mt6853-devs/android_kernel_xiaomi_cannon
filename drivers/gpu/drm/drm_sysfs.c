@@ -229,16 +229,49 @@ static ssize_t modes_show(struct device *device,
 	return written;
 }
 
+static ssize_t panel_info_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
+{
+    int ret = 0;
+    const char *panel_name_prefix = "panel_name=dsi_";
+    struct drm_connector *connector = to_drm_connector(device);
+    if (!connector) {
+        pr_info("%s-%d connector is NULL \r\n",__func__, __LINE__);
+        return ret;
+    }
+
+    return snprintf(buf, PAGE_SIZE, "%s%s\n", panel_name_prefix, connector->display_info.name);
+}
+
+static ssize_t panel_event_show(struct device *device,
+                           struct device_attribute *attr,
+                           char *buf)
+{
+        ssize_t ret = 0;
+        struct drm_connector *connector = to_drm_connector(device);
+        if (!connector) {
+                pr_info("%s-%d connector is NULL \r\n",__func__, __LINE__);
+                return ret;
+        }
+
+        return snprintf(buf, PAGE_SIZE, "%d\n", connector->panel_event);
+}
+
 static DEVICE_ATTR_RW(status);
 static DEVICE_ATTR_RO(enabled);
 static DEVICE_ATTR_RO(dpms);
 static DEVICE_ATTR_RO(modes);
+static DEVICE_ATTR_RO(panel_info);
+static DEVICE_ATTR_RO(panel_event);
 
 static struct attribute *connector_dev_attrs[] = {
 	&dev_attr_status.attr,
 	&dev_attr_enabled.attr,
 	&dev_attr_dpms.attr,
 	&dev_attr_modes.attr,
+	&dev_attr_panel_info.attr,
+	&dev_attr_panel_event.attr,
 	NULL
 };
 
