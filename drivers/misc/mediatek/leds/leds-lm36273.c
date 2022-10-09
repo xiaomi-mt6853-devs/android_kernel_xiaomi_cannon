@@ -7,11 +7,8 @@
 #include <linux/of_gpio.h>
 #include <linux/gpio/consumer.h>
 #include <linux/delay.h>
-//#include <../lcm/panel_set_disp_param.h>
-
 
 #include "leds-lm36273.h"
-#include "dsi_panel_mi.h"
 
 static struct LCM_led_i2c_read_write lcm_led_i2c_read_write = {0};
 
@@ -144,7 +141,6 @@ int lm36273_brightness_set(int level)
 	if (level == 0 && g_lm36273_led.level != 0) {
 		/* disable BL and current sink*/
 		lm36273_reg_write_bytes(LP36273_DISP_BL_ENABLE, 0x0);
-		g_lm36273_led.hbm_on = 0;
 		pr_debug("lm36273_brightness_set, close\n");
 	} else if (level > 0 && g_lm36273_led.level == 0) {
 		/* enable BL and current sink*/
@@ -159,46 +155,6 @@ int lm36273_brightness_set(int level)
 }
 EXPORT_SYMBOL(lm36273_brightness_set);
 
-
-int hbm_brightness_set(int level)
-{
-	int tmp_bl = 0;
-	mutex_lock(&g_lm36273_led.lock);
-
-	if (g_lm36273_led.level == BL_LEVEL_MAX) {
-		switch (level) {
-		case DISPPARAM_LCD_HBM_L1_ON:
-			lm36273_reg_write_bytes(LP36273_DISP_BB_LSB, BL_HBM_L1 & 0x7);
-			lm36273_reg_write_bytes(LP36273_DISP_BB_MSB, BL_HBM_L1 >> 3);
-			g_lm36273_led.hbm_on = 1;
-			break;
-		case DISPPARAM_LCD_HBM_L2_ON:
-			lm36273_reg_write_bytes(LP36273_DISP_BB_LSB, BL_HBM_L2 & 0x7);
-			lm36273_reg_write_bytes(LP36273_DISP_BB_MSB, BL_HBM_L2 >> 3);
-			g_lm36273_led.hbm_on = 1;
-			break;
-		case DISPPARAM_LCD_HBM_L3_ON:
-			lm36273_reg_write_bytes(LP36273_DISP_BB_LSB, BL_HBM_L3 & 0x7);
-			lm36273_reg_write_bytes(LP36273_DISP_BB_MSB, BL_HBM_L3 >> 3);
-			g_lm36273_led.hbm_on = 1;
-			break;
-		case DISPPARAM_LCD_HBM_OFF:
-			if (g_lm36273_led.level > 0 && g_lm36273_led.level <= BL_LEVEL_MAX) {
-				tmp_bl = bl_level_remap[g_lm36273_led.level];
-				lm36273_reg_write_bytes(LP36273_DISP_BB_LSB, tmp_bl & 0x7);
-				lm36273_reg_write_bytes(LP36273_DISP_BB_MSB, tmp_bl >> 3);
-			}
-			g_lm36273_led.hbm_on = 0;
-			break;
-		default:
-			break;
-		}
-	}
-
-	mutex_unlock(&g_lm36273_led.lock);
-	return 0;
-}
-EXPORT_SYMBOL(hbm_brightness_set);
 
 static int led_i2c_reg_op(char *buffer, int op, int count)
 {
@@ -364,7 +320,6 @@ static int lm36273_probe(struct i2c_client *client,
 	pr_debug("lm36273_probe: %s\n", client->name);
 	g_lm36273_led.client = client;
 	mutex_init(&g_lm36273_led.lock);
-	g_lm36273_led.hbm_on = 0;
 	
 	pr_debug("lm36273_sysfs create: %s\n", client->name);
 	ret = sysfs_create_group(&client->dev.kobj, &lm36273_attr_group);
