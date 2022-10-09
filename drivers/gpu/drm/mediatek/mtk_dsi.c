@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -17,6 +18,7 @@
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_crtc_helper.h>
+#include <drm/drm_notifier_mi.h>
 #include <linux/clk.h>
 #include <linux/sched.h>
 #include <linux/sched/clock.h>
@@ -269,6 +271,8 @@
 
 #define NS_TO_CYCLE(n, c) ((n) / (c))
 
+static struct mtk_dsi *g_mtk_dsi;
+
 #define MTK_DSI_HOST_IS_READ(type)                                             \
 	((type == MIPI_DSI_GENERIC_READ_REQUEST_0_PARAM) ||                    \
 	 (type == MIPI_DSI_GENERIC_READ_REQUEST_1_PARAM) ||                    \
@@ -287,6 +291,8 @@ struct mtk_dsi;
 #define DSI_GERNERIC_SHORT_PACKET_ID_2 0x23
 #define DSI_GERNERIC_LONG_PACKET_ID 0x29
 #define DSI_GERNERIC_READ_LONG_PACKET_ID 0x14
+
+struct drm_notifier_data g_notify_data;
 
 struct DSI_T0_INS {
 	unsigned CONFG : 8;
@@ -314,6 +320,12 @@ static const char * const mtk_dsi_porch_str[] = {
 static DEFINE_MUTEX(set_mmclk_lock);
 
 #define AS_UINT32(x) (*(u32 *)((void *)x))
+
+#define WAIT_RESUME_TIMEOUT 200
+
+struct mtk_ddp_comp *g_output_comp;
+static struct delayed_work mtk_drm_suspend_delayed_work;
+static struct wakeup_source prim_panel_wakelock;
 
 struct mtk_dsi_driver_data {
 	const u32 reg_cmdq_ofs;
@@ -417,6 +429,11 @@ static inline struct mtk_dsi *encoder_to_dsi(struct drm_encoder *e)
 static inline struct mtk_dsi *connector_to_dsi(struct drm_connector *c)
 {
 	return container_of(c, struct mtk_dsi, conn);
+}
+
+struct drm_connector *dsi_to_connector(void *dsi)
+{
+	return &(((struct mtk_dsi *)dsi)->conn);
 }
 
 static inline struct mtk_dsi *host_to_dsi(struct mipi_dsi_host *h)
@@ -1999,6 +2016,8 @@ static void mtk_output_dsi_enable(struct mtk_dsi *dsi,
 	unsigned int mode_id = mtk_state->prop_val[CRTC_PROP_DISP_MODE_IDX];
 	unsigned int fps_chg_index = 0;
 
+	int blank;
+
 	DDPINFO("%s +\n", __func__);
 
 	if (dsi->output_en) {
@@ -2119,11 +2138,64 @@ static void mtk_output_dsi_enable(struct mtk_dsi *dsi,
 	te_cnt = 1;
 	dsi->doze_enabled = new_doze_state;
 
+	blank = DRM_BLANK_UNBLANK;
+	g_notify_data.data = &blank;
+	drm_notifier_call_chain(DRM_EVENT_BLANK, &g_notify_data);
+
 	return;
 err_dsi_power_off:
 	mtk_dsi_stop(dsi);
 	mtk_dsi_poweroff(dsi);
 }
+
+/**
+ *  mtk_drm_early_resume - Panel light on interface for fingerprint
+ *  In order to improve panel light on performance when unlock device by
+ *  fingerprint, export this interface for fingerprint.Once finger touch
+ *  happened, it could light on LCD panel in advance of android resume.
+ *
+ *  @timeout: wait time for android resume and set panel on.
+ *            If timeout, mtk drm dsi will disable panel to avoid fingerprint
+ *            touch by mistake.
+ */
+
+int mtk_drm_early_resume(int timeout)
+{
+	int ret = 0;
+	 struct drm_connector *connector = NULL;
+
+        if (!g_output_comp) {
+                pr_err("%s: invalid output comp g_output_comp is nullptr\n", __func__);
+                ret = -EINVAL;
+		return ret;
+	}
+
+	ret = wait_event_timeout(resume_wait_q,
+		!atomic_read(&resume_pending),
+		msecs_to_jiffies(WAIT_RESUME_TIMEOUT));
+	if (!ret) {
+		pr_err("Primary fb resume timeout\n");
+		return -ETIMEDOUT;
+	}
+
+	mutex_lock(&g_output_comp->panel_lock);
+
+	__pm_stay_awake(&prim_panel_wakelock);
+
+	connector = dsi_to_connector((void *)g_output_comp);
+	connector->panel_event = 1;
+	pr_info("%s panel_event=%d\n", __func__, connector->panel_event);
+	sysfs_notify(&connector->kdev->kobj, NULL, "panel_event");
+
+	if (timeout > 0)
+		schedule_delayed_work(&mtk_drm_suspend_delayed_work, msecs_to_jiffies(timeout));
+	else
+		__pm_relax(&prim_panel_wakelock);
+
+	mutex_unlock(&g_output_comp->panel_lock);
+	return ret;
+}
+EXPORT_SYMBOL(mtk_drm_early_resume);
 
 static int mtk_dsi_stop_vdo_mode(struct mtk_dsi *dsi, void *handle);
 static int mtk_dsi_wait_cmd_frame_done(struct mtk_dsi *dsi,
@@ -2170,11 +2242,17 @@ static void mtk_output_dsi_disable(struct mtk_dsi *dsi,
 {
 	bool new_doze_state = mtk_dsi_doze_state(dsi);
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(dsi->encoder.crtc);
+	int blank;
 
 	DDPINFO("%s+ doze_enabled:%d\n", __func__, new_doze_state);
+
+	blank = DRM_BLANK_POWERDOWN;
+	g_notify_data.data = &blank;
+
 	if (!dsi->output_en)
 		return;
 
+	drm_notifier_call_chain(DRM_EARLY_EVENT_BLANK, &g_notify_data);
 	mtk_drm_crtc_wait_blank(mtk_crtc);
 
 	/* 1. If not doze mode, turn off backlight */
@@ -2222,6 +2300,7 @@ static void mtk_output_dsi_disable(struct mtk_dsi *dsi,
 	dsi->output_en = false;
 	dsi->doze_enabled = new_doze_state;
 	DDPINFO("%s-\n", __func__);
+	drm_notifier_call_chain(DRM_EVENT_BLANK, &g_notify_data);
 }
 
 static void mtk_dsi_encoder_destroy(struct drm_encoder *encoder)
@@ -2455,9 +2534,27 @@ err_connector_cleanup:
 	return ret;
 }
 
+static void mtk_drm_suspend_delayed_work_handle(struct work_struct *work)
+{
+	struct drm_connector *connector = NULL;
+	mutex_lock(&g_output_comp->panel_lock);
+	connector = dsi_to_connector((void *)g_output_comp);
+	connector->panel_event = 0;
+	pr_info("%s panel_event=%d\n", __func__, connector->panel_event);
+	sysfs_notify(&connector->kdev->kobj, NULL, "panel_event");
+
+	__pm_relax(&prim_panel_wakelock);
+	mutex_unlock(&g_output_comp->panel_lock);
+}
+
 static int mtk_dsi_create_conn_enc(struct drm_device *drm, struct mtk_dsi *dsi)
 {
 	int ret;
+
+	struct mtk_ddp_comp *comp = &dsi->ddp_comp;
+
+	enum mtk_ddp_comp_type type;
+	struct drm_connector *connector = NULL;
 
 	ret = drm_encoder_init(drm, &dsi->encoder, &mtk_dsi_encoder_funcs,
 			       DRM_MODE_ENCODER_DSI, NULL);
@@ -2481,6 +2578,17 @@ static int mtk_dsi_create_conn_enc(struct drm_device *drm, struct mtk_dsi *dsi)
 		if (ret)
 			goto err_encoder_cleanup;
 	}
+	type = mtk_ddp_comp_get_type(comp->id);
+        if (type == MTK_DSI) {
+		pr_info("%s init mtk ealry resume resources\n", __func__);
+                connector = dsi_to_connector((void *)comp);
+		mutex_init(&comp->panel_lock);
+		g_output_comp = comp;
+		atomic_set(&resume_pending, 0);
+		wakeup_source_init(&prim_panel_wakelock, "prim_panel_wakelock");
+		init_waitqueue_head(&resume_wait_q);
+		INIT_DELAYED_WORK(&mtk_drm_suspend_delayed_work, mtk_drm_suspend_delayed_work_handle);
+	}
 
 	return 0;
 
@@ -2491,6 +2599,14 @@ err_encoder_cleanup:
 
 static void mtk_dsi_destroy_conn_enc(struct mtk_dsi *dsi)
 {
+	struct mtk_ddp_comp *comp = &dsi->ddp_comp;
+
+	if (comp == g_output_comp) {
+		pr_info("%s destroy mtk ealry resume resources\n", __func__);
+		cancel_delayed_work_sync(&mtk_drm_suspend_delayed_work);
+		wakeup_source_trash(&prim_panel_wakelock);
+	}
+
 	drm_encoder_cleanup(&dsi->encoder);
 	/* Skip connector cleanup if creation was delegated to the bridge */
 	if (dsi->conn.dev)
@@ -5878,6 +5994,7 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 
 	DDPINFO("%s+\n", __func__);
 	dsi = devm_kzalloc(dev, sizeof(*dsi), GFP_KERNEL);
+	g_mtk_dsi = dsi;
 	if (!dsi)
 		return -ENOMEM;
 

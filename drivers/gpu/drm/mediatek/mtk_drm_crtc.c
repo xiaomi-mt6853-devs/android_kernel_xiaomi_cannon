@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -84,6 +85,8 @@ static struct mtk_drm_property mtk_crtc_property[CRTC_PROP_MAX] = {
 	{DRM_MODE_PROP_ATOMIC, "USER_SCEN", 0, UINT_MAX, 0},
 	{DRM_MODE_PROP_ATOMIC, "HDR_ENABLE", 0, UINT_MAX, 0},
 	{DRM_MODE_PROP_ATOMIC, "OVL_DSI_SEQ", 0, UINT_MAX, 0},
+	{DRM_MODE_PROP_ATOMIC, "ICON_ENABLE", 0, UINT_MAX, 0},
+	{DRM_MODE_PROP_ATOMIC, "ENROLL_ENABLE", 0, UINT_MAX, 0},
 };
 
 static struct cmdq_pkt *sb_cmdq_handle;

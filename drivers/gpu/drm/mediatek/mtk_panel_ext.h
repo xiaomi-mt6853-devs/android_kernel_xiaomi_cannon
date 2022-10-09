@@ -340,8 +340,12 @@ struct mtk_panel_funcs {
 	void (*hbm_get_state)(struct drm_panel *panel, bool *state);
 	void (*hbm_get_wait_state)(struct drm_panel *panel, bool *wait);
 	bool (*hbm_set_wait_state)(struct drm_panel *panel, bool wait);
+	int (*panel_whitepoint_get)(struct drm_panel *panel);
 };
 
+int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg);
+int mtk_ddic_dsi_send_cmd(struct mtk_ddic_dsi_msg *cmd_msg,
+			bool blocking);
 void mtk_panel_init(struct mtk_panel_ctx *ctx);
 void mtk_panel_add(struct mtk_panel_ctx *ctx);
 void mtk_panel_remove(struct mtk_panel_ctx *ctx);
