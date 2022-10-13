@@ -61,8 +61,6 @@
 #define SYNC_TIME_CYCLC 10000
 #define SYNC_TIME_START_CYCLC 3000
 #define AMBIENT_LCD_BACKLIGHT_VALUE 100
-#define AMBIENT_LCD_BACKLIGHT_HIGH 13
-#define AMBIENT_LCD_BACKLIGHT_LOW 14
 
 enum {
 	CUST_CMD_CALI,
@@ -2166,19 +2164,11 @@ static int mtk_nanohub_config(struct hf_device *hfdev,
 		spin_unlock(&config_data_lock);
 		break;
 	case ID_LIGHT:
-		if (data[0]== AMBIENT_LCD_BACKLIGHT_HIGH || data[0] == AMBIENT_LCD_BACKLIGHT_LOW){
-			if (sizeof(device->backlight_config_data) < length)
-				length = sizeof(device->backlight_config_data);
-			spin_lock(&config_data_lock);
-			memcpy(device->backlight_config_data, data, length);
-			spin_unlock(&config_data_lock);
-		} else {
 			if (sizeof(device->light_config_data) < length)
 				length = sizeof(device->light_config_data);
 			spin_lock(&config_data_lock);
 			memcpy(device->light_config_data, data, length);
 			spin_unlock(&config_data_lock);
-		}
 		break;
 	case ID_PROXIMITY:
 		if (sizeof(device->proximity_config_data) < length)
