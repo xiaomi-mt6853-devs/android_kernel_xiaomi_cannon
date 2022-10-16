@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -13,6 +14,7 @@
 
 #include "regulator.h"
 
+extern int camera_power;
 
 static const int regulator_voltage[] = {
 	REGULATOR_VOLTAGE_0,
@@ -35,6 +37,12 @@ struct REGULATOR_CTRL regulator_control[REGULATOR_TYPE_MAX_NUM] = {
 #endif
 	{"vcamd"},
 	{"vcamio"},
+};
+
+struct REGULATOR_CTRL regulator_control_pm8008[REGULATOR_TYPE_MAX_NUM] = {
+	{"vcamap"},
+	{"vcamdp"},
+	{"vcamiop"},
 };
 
 static struct REGULATOR reg_instance;
@@ -60,9 +68,14 @@ static enum IMGSENSOR_RETURN regulator_init(
 				"cam%d_%s",
 				idx,
 				regulator_control[type].pregulator_type);
-			if (ret < 0)
-				return ret;
-			preg->pregulator[idx][type] = regulator_get_optional(
+			if(camera_power == 2){
+			snprintf(str_regulator_name,
+				sizeof(str_regulator_name),
+				"cam%d_%s",
+				idx,
+				regulator_control_pm8008[type].pregulator_type);
+			}
+			preg->pregulator[idx][type] = regulator_get(
 					&pcommon->pplatform_device->dev,
 					str_regulator_name);
 			if (IS_ERR(preg->pregulator[idx][type])) {
