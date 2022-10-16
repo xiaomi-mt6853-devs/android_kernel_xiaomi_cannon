@@ -39,6 +39,10 @@
 #define IMGSENSOR_TOSTRING(value)           #value
 #define IMGSENSOR_STRINGIZE(stringizedName) IMGSENSOR_TOSTRING(stringizedName)
 
+//XIAOMI: libin16 add
+#define _XIAOMI_
+#define MIPI_SWITCH
+
 enum IMGSENSOR_ARCH {
 	IMGSENSOR_ARCH_V1 = 0,
 	IMGSENSOR_ARCH_V2,
