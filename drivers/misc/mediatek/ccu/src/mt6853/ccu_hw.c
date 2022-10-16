@@ -87,6 +87,7 @@ static int ccu_load_segments(const struct firmware *fw,
 	enum CCU_BIN_TYPE type);
 static void *ccu_da_to_va(u64 da, uint32_t len);
 static int ccu_sanity_check(const struct firmware *fw);
+
 static inline unsigned int CCU_MsToJiffies(unsigned int Ms)
 {
 	return ((Ms * HZ + 512) >> 10);
