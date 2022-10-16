@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -121,6 +122,11 @@
  *
  ************************************************************************/
 /* SENSOR CHIP VERSION */
+#define S5KGM1STOFILM_SENSOR_ID					0xf8d1
+#define S5K3L6OFILM_SENSOR_ID					0x30c6
+#define HI259OFILM_SENSOR_ID                    0x00e1
+#define OV02B10OFILM_SENSOR_ID                  0x002b
+#define OV8856OFILM_SENSOR_ID                   0x885A
 /*IMX*/
 #define IMX766_SENSOR_ID                        0x0766
 #define IMX499_SENSOR_ID                        0x0499
@@ -370,6 +376,11 @@
 /* CAMERA DRIVER NAME */
 #define CAMERA_HW_DEVNAME                       "kd_camera_hw"
 /* SENSOR DEVICE DRIVER NAME */
+#define SENSOR_DRVNAME_S5KGM1STOFILM_MIPI_RAW 	"s5kgm1stofilm_mipi_raw"
+#define SENSOR_DRVNAME_S5K3L6OFILM_MIPI_RAW 	"s5k3l6ofilm_mipi_raw"
+#define SENSOR_DRVNAME_HI259OFILM_MIPI_RAW      "hi259ofilm_mipi_raw"
+#define SENSOR_DRVNAME_OV02B10OFILM_MIPI_RAW    "ov02b10ofilm_mipi_raw"
+#define SENSOR_DRVNAME_OV8856OFILM_MIPI_RAW     "ov8856ofilm_mipi_raw"
 /*IMX*/
 #define SENSOR_DRVNAME_IMX499_MIPI_RAW          "imx499_mipi_raw"
 #define SENSOR_DRVNAME_IMX499_MIPI_RAW_13M      "imx499_mipi_raw_13m"
