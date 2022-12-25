@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -202,15 +201,6 @@ int ccu_allocate_mem(struct CcuMemHandle *memHandle, int size, bool cached)
 	}
 
 	LOG_DBG_MUST("memHandle->ionHandleKd(%p)\n", memHandle->ionHandleKd);
-	// get ion buffer share handle
-	memHandle->meminfo.shareFd = ion_share_dma_buf_fd(_ccu_ion_client,
-		memHandle->ionHandleKd);
-	if (memHandle->meminfo.shareFd < 0) {
-		LOG_ERR("fail to get ion buffer share handle");
-		ion_free(_ccu_ion_client, memHandle->ionHandleKd);
-		return -1;
-	}
-	LOG_DBG_MUST("memHandle->share_fd(%d)\n", memHandle->meminfo.shareFd);
 
 	// get buffer virtual address
 	memHandle->meminfo.size = size;
