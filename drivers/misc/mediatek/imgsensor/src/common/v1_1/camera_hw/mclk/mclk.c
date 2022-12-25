@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -37,7 +38,7 @@ static enum IMGSENSOR_RETURN mclk_init(
 
 	pinst->ppinctrl = devm_pinctrl_get(&pcommon->pplatform_device->dev);
 	if (IS_ERR(pinst->ppinctrl)) {
-		PK_PR_ERR("%s : Cannot find camera pinctrl!\n", __func__);
+		pr_debug("%s : Cannot find camera pinctrl!\n", __func__);
 		/* ret = IMGSENSOR_RETURN_ERROR; */
 		return IMGSENSOR_RETURN_ERROR;
 	}
@@ -58,7 +59,7 @@ static enum IMGSENSOR_RETURN mclk_init(
 
 				mutex_lock(pinst->pmclk_mutex);
 				if (IS_ERR(pinst->ppinctrl_state[i][j]))
-					pr_debug("%s : pinctrl err, %s\n",
+					pr_debug("%s : pinctrl warn, %s\n",
 						__func__,
 						str_pinctrl_name);
 				else {
@@ -135,6 +136,7 @@ static enum IMGSENSOR_RETURN mclk_set(
 	enum   IMGSENSOR_RETURN ret = IMGSENSOR_RETURN_SUCCESS;
 	enum MCLK_STATE state_index = MCLK_STATE_DISABLE;
 
+
 	if (pin_state < IMGSENSOR_HW_PIN_STATE_LEVEL_0 ||
 	    pin_state > IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH) {
 		ret = IMGSENSOR_RETURN_ERROR;
@@ -145,22 +147,22 @@ static enum IMGSENSOR_RETURN mclk_set(
 
 		ppinctrl_state =
 			pinst->ppinctrl_state[sensor_idx][state_index];
-		/*
-		 * pr_debug(
-		 *	"%s : idx %d pin %d state %d driv_current %d\n",
-		 *	__func__,
-		 *	sensor_idx,
-		 *	pin,
-		 *	pin_state,
-		 *	pinst->drive_current[sensor_idx]);
-		 */
+#if 0
+		pr_debug(
+			"%s : sensor_idx %d pinctrl, pin %d, pin_state %d, drive_current %d\n",
+			__func__,
+			sensor_idx,
+			pin,
+			pin_state,
+			pinst->drive_current[sensor_idx]);
 
+#endif
 		mutex_lock(pinst->pmclk_mutex);
 
 		if (!IS_ERR(ppinctrl_state))
 			pinctrl_select_state(pinst->ppinctrl, ppinctrl_state);
 		else
-			PK_PR_ERR(
+			pr_debug(
 				"%s : sensor_idx %d pinctrl, PinIdx %d, Val %d, drive current %d\n",
 				__func__,
 				sensor_idx,

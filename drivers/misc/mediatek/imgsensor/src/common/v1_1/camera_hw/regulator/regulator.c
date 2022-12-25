@@ -14,7 +14,7 @@
 
 #include "regulator.h"
 
-
+extern int camera_power;
 static const int regulator_voltage[] = {
 	REGULATOR_VOLTAGE_0,
 	REGULATOR_VOLTAGE_1000,
@@ -31,11 +31,14 @@ static const int regulator_voltage[] = {
 
 struct REGULATOR_CTRL regulator_control[REGULATOR_TYPE_MAX_NUM] = {
 	{"vcama"},
-#ifdef CONFIG_REGULATOR_RT5133
-	{"vcama1"},
-#endif
 	{"vcamd"},
 	{"vcamio"},
+};
+
+struct REGULATOR_CTRL regulator_control_pm8008[REGULATOR_TYPE_MAX_NUM] = {
+	{"vcamap"},
+	{"vcamdp"},
+	{"vcamiop"},
 };
 
 static struct REGULATOR reg_instance;
@@ -61,11 +64,18 @@ static enum IMGSENSOR_RETURN regulator_init(
 				"cam%d_%s",
 				idx,
 				regulator_control[type].pregulator_type);
+			if(camera_power == 2){
+			snprintf(str_regulator_name,
+				sizeof(str_regulator_name),
+				"cam%d_%s",
+				idx,
+				regulator_control_pm8008[type].pregulator_type);
+			}
 			preg->pregulator[idx][type] = regulator_get(
 					&pcommon->pplatform_device->dev,
 					str_regulator_name);
-            if (preg->pregulator[idx][type] == NULL)
-                PK_INFO("WARN: regulator[%d][%d]  %s fail!\n",
+			if (preg->pregulator[idx][type] == NULL)
+				PK_INFO("WARN: regulator[%d][%d]  %s fail!\n",
 						idx, type, str_regulator_name);
 			atomic_set(&preg->enable_cnt[idx][type], 0);
 		}
@@ -113,17 +123,17 @@ static enum IMGSENSOR_RETURN regulator_set(
 	if (pin > IMGSENSOR_HW_PIN_DOVDD   ||
 	    pin < IMGSENSOR_HW_PIN_AVDD    ||
 	    pin_state < IMGSENSOR_HW_PIN_STATE_LEVEL_0 ||
-		pin_state >= IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH)
+	    pin_state >= IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH)
 		return IMGSENSOR_RETURN_ERROR;
 
 	reg_type_offset = REGULATOR_TYPE_VCAMA;
 
-    pregulator =
-        preg->pregulator[sensor_idx][
-	        reg_type_offset + pin - IMGSENSOR_HW_PIN_AVDD];
+	pregulator =
+		preg->pregulator[sensor_idx][
+			reg_type_offset + pin - IMGSENSOR_HW_PIN_AVDD];
 
-    enable_cnt =
-        &preg->enable_cnt[sensor_idx][
+	enable_cnt =
+		&preg->enable_cnt[sensor_idx][
 			reg_type_offset + pin - IMGSENSOR_HW_PIN_AVDD];
 
 	if (pregulator) {
@@ -134,14 +144,14 @@ static enum IMGSENSOR_RETURN regulator_set(
 				regulator_voltage[
 				pin_state - IMGSENSOR_HW_PIN_STATE_LEVEL_0])) {
 
-				PK_PR_ERR(
+				pr_debug(
 				  "[regulator]fail to regulator_set_voltage, powertype:%d powerId:%d\n",
 				  pin,
 				  regulator_voltage[
 				  pin_state - IMGSENSOR_HW_PIN_STATE_LEVEL_0]);
 			}
 			if (regulator_enable(pregulator)) {
-				PK_PR_ERR(
+				pr_debug(
 				"[regulator]fail to regulator_enable, powertype:%d powerId:%d\n",
 				pin,
 				regulator_voltage[
@@ -154,7 +164,7 @@ static enum IMGSENSOR_RETURN regulator_set(
 				PK_DBG("[regulator]%d is enabled\n", pin);
 
 			if (regulator_disable(pregulator)) {
-				PK_PR_ERR(
+				pr_debug(
 					"[regulator]fail to regulator_disable, powertype: %d\n",
 					pin);
 				return IMGSENSOR_RETURN_ERROR;
@@ -162,7 +172,7 @@ static enum IMGSENSOR_RETURN regulator_set(
 			atomic_dec(enable_cnt);
 		}
 	} else {
-		PK_PR_ERR("regulator == NULL %d %d %d\n",
+		pr_debug("regulator == NULL %d %d %d\n",
 				reg_type_offset,
 				pin,
 				IMGSENSOR_HW_PIN_AVDD);
@@ -175,7 +185,6 @@ static enum IMGSENSOR_RETURN regulator_dump(void *pinstance)
 {
 	struct REGULATOR *preg = (struct REGULATOR *)pinstance;
 	int i, j;
-	int enable = 0;
 
 	for (j = IMGSENSOR_SENSOR_IDX_MIN_NUM;
 		j < IMGSENSOR_SENSOR_IDX_MAX_NUM;
@@ -184,18 +193,13 @@ static enum IMGSENSOR_RETURN regulator_dump(void *pinstance)
 		for (i = REGULATOR_TYPE_VCAMA;
 		i < REGULATOR_TYPE_MAX_NUM;
 		i++) {
-
 			if (regulator_is_enabled(preg->pregulator[j][i]) &&
 				atomic_read(&preg->enable_cnt[j][i]) != 0)
-				enable = 1;
-			else
-				enable = 0;
-
-			PK_DBG("[sensor_dump][regulator] index= %d, %s = %d, enable = %d\n",
-				j,
-				regulator_control[i].pregulator_type,
-				regulator_get_voltage(preg->pregulator[j][i]),
-				enable);
+				PK_DBG("index= %d %s = %d\n",
+					j,
+					regulator_control[i].pregulator_type,
+					regulator_get_voltage(
+						preg->pregulator[j][i]));
 		}
 	}
 	return IMGSENSOR_RETURN_SUCCESS;

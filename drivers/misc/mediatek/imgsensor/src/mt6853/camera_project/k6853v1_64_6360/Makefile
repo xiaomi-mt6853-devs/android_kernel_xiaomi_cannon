@@ -25,12 +25,6 @@ project_drv += $(1)/
 endif
 endef
 
-
-
-ifneq ($(wildcard $(IMGSENSOR_DRIVER_PATH)/$(MTK_PLATFORM)/camera_project/$(ARCH_MTK_PROJECT)/camera_hw),)
-obj-y				+= camera_hw/
-endif
-
 $(foreach drv,$(subst $\",,$(CONFIG_CUSTOM_KERNEL_IMGSENSOR)),$(eval $(call FILTER_PROJECT_DRV,$(drv))))
 
 obj-y += $(project_drv)
