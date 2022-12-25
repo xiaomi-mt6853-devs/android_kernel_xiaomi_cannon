@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -71,7 +70,7 @@ static kgid_t gid = KGIDT_INIT(1000);
 static DEFINE_SEMAPHORE(sem_mutex);
 
 static unsigned int interval = 1;	/* seconds, 0 : no auto polling */
-static int trip_temp[10] = { 100000, 96000, 95000, 90000, 80000,
+static int trip_temp[10] = { 120000, 110000, 100000, 90000, 80000,
 				70000, 65000, 60000, 55000, 50000 };
 
 static struct thermal_zone_device *thz_dev;
@@ -79,8 +78,8 @@ static int mtkts_bts_debug_log;
 static int kernelmode;
 static int g_THERMAL_TRIP[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
-static int num_trip = 1;
-static char g_bind0[20] = "mtktsAP-sysrst";
+static int num_trip;
+static char g_bind0[20] = {"mtktsAP-sysrst"};
 static char g_bind1[20] = { 0 };
 static char g_bind2[20] = { 0 };
 static char g_bind3[20] = { 0 };
@@ -506,23 +505,30 @@ static struct BTS_TEMPERATURE BTS_Temperature_Table7[] = {
 
 
 /* convert register to temperature  */
-static __s16 mtkts_bts_thermistor_conver_temp(__s32 Res)
+static __s32 mtkts_bts_thermistor_conver_temp(__s32 Res)
 {
 	int i = 0;
 	int asize = 0;
 	__s32 RES1 = 0, RES2 = 0;
-	//__s32 TAP_Value = -200, TMP1 = 0, TMP2 = 0;
-	__s32 TAP_Value = -2000, TMP1 = 0, TMP2 = 0;
+	__s32 TAP_Value = -200, TMP1 = 0, TMP2 = 0;
+#ifdef APPLY_PRECISE_BTS_TEMP
+	TAP_Value = TAP_Value * 1000;
+#endif
+	asize = (ntc_tbl_size / sizeof(struct BTS_TEMPERATURE));
 
 	/* mtkts_bts_dprintk("mtkts_bts_thermistor_conver_temp() :
 	 * asize = %d, Res = %d\n",asize,Res);
 	 */
 	if (Res >= BTS_Temperature_Table[0].TemperatureR) {
-		//TAP_Value = -40;	/* min */
-		TAP_Value = -400;    /* min */
+		TAP_Value = -40;	/* min */
+#ifdef APPLY_PRECISE_BTS_TEMP
+		TAP_Value = TAP_Value * 1000;
+#endif
 	} else if (Res <= BTS_Temperature_Table[asize - 1].TemperatureR) {
-		//TAP_Value = 125;	/* max */
-		TAP_Value = 1250;    /* max */
+		TAP_Value = 125;	/* max */
+#ifdef APPLY_PRECISE_BTS_TEMP
+		TAP_Value = TAP_Value * 1000;
+#endif
 	} else {
 		RES1 = BTS_Temperature_Table[0].TemperatureR;
 		TMP1 = BTS_Temperature_Table[0].BTS_Temp;
@@ -545,8 +551,13 @@ static __s16 mtkts_bts_thermistor_conver_temp(__s32 Res)
 			 * __LINE__,i,RES1,TMP1);
 			 */
 		}
-		TAP_Value = (((Res - RES2) * TMP1) + ((RES1 - Res) * TMP2))*10
+#ifdef APPLY_PRECISE_BTS_TEMP
+		TAP_Value = mult_frac((((Res - RES2) * TMP1) +
+			((RES1 - Res) * TMP2)), 1000, (RES1 - RES2));
+#else
+		TAP_Value = (((Res - RES2) * TMP1) + ((RES1 - Res) * TMP2))
 								/ (RES1 - RES2);
+#endif
 	}
 
 #if 0
@@ -575,7 +586,7 @@ static __s16 mtkts_bts_thermistor_conver_temp(__s32 Res)
 
 /* convert ADC_AP_temp_volt to register */
 /*Volt to Temp formula same with 6589*/
-static __s16 mtk_ts_bts_volt_to_temp(__u32 dwVolt)
+static __s32 mtk_ts_bts_volt_to_temp(__u32 dwVolt)
 {
 	__s32 TRes;
 	__u64 dwVCriAP = 0;
@@ -734,8 +745,9 @@ int mtkts_bts_get_hw_temp(void)
 	/* get HW AP temp (TSAP) */
 	/* cat /sys/class/power_supply/AP/AP_temp */
 	t_ret = get_hw_bts_temp();
-	t_ret = t_ret * 100;
-
+#ifndef APPLY_PRECISE_BTS_TEMP
+	t_ret = t_ret * 1000;
+#endif
 	mutex_unlock(&BTS_lock);
 
 	if ((tsatm_thermal_get_catm_type() == 2) &&

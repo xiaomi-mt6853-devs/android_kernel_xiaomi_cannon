@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -55,7 +54,7 @@ static void mtk_cl_backlight_set_max_brightness_limit(void)
 				defined(CONFIG_LEDS_MTK_I2C)
 			setMaxBrightness("lcd-backlight", 100, 0);
 			#else
-			setMaxbrightness(2047, 0);
+			setMaxbrightness(255, 0);
 			#endif
 			break;
 		case 1:
@@ -65,7 +64,7 @@ static void mtk_cl_backlight_set_max_brightness_limit(void)
 				defined(CONFIG_LEDS_MTK_I2C)
 			setMaxBrightness("lcd-backlight", 70, 0);
 			#else
-			setMaxbrightness(1432, 0);
+			setMaxbrightness(178, 0);
 			#endif
 			break;
 		case 2:
@@ -75,7 +74,7 @@ static void mtk_cl_backlight_set_max_brightness_limit(void)
 				defined(CONFIG_LEDS_MTK_I2C)
 			setMaxBrightness("lcd-backlight", 40, 1);
 			#else
-			setMaxbrightness(818, 1);
+			setMaxbrightness(102, 1);
 			#endif
 			break;
 		case 3:
@@ -85,7 +84,7 @@ static void mtk_cl_backlight_set_max_brightness_limit(void)
 				defined(CONFIG_LEDS_MTK_I2C)
 			setMaxBrightness("lcd-backlight", 10, 1);
 			#else
-			setMaxbrightness(204, 1);
+			setMaxbrightness(25, 1);
 			#endif
 			break;
 		default:
@@ -94,7 +93,7 @@ static void mtk_cl_backlight_set_max_brightness_limit(void)
 				defined(CONFIG_LEDS_MTK_I2C)
 			setMaxBrightness("lcd-backlight", 100, 0);
 			#else
-			setMaxbrightness(2047, 0);
+			setMaxbrightness(255, 0);
 			#endif
 			break;
 		}
