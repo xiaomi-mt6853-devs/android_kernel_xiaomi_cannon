@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -22,7 +21,7 @@
 #include <linux/pinctrl/pinctrl.h>
 #include "imgsensor_hw.h"
 #include "imgsensor_common.h"
-#include "imgsensor_platform.h"
+#include <imgsensor_platform.h>
 
 enum GPIO_CTRL_STATE_CAM {
 	/* Main */
@@ -32,6 +31,10 @@ enum GPIO_CTRL_STATE_CAM {
 	GPIO_CTRL_STATE_RST_L,
 	GPIO_CTRL_STATE_LDO_VCAMA_H,
 	GPIO_CTRL_STATE_LDO_VCAMA_L,
+#ifdef CONFIG_REGULATOR_RT5133
+	GPIO_CTRL_STATE_LDO_VCAMA1_H,
+	GPIO_CTRL_STATE_LDO_VCAMA1_L,
+#endif
 	GPIO_CTRL_STATE_LDO_VCAMD_H,
 	GPIO_CTRL_STATE_LDO_VCAMD_L,
 	GPIO_CTRL_STATE_LDO_VCAMIO_H,

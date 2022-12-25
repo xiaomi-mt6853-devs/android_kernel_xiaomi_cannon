@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -39,6 +38,9 @@ enum REGULATOR_VOLTAGE {
 
 enum REGULATOR_TYPE {
 	REGULATOR_TYPE_VCAMA,
+#ifdef CONFIG_REGULATOR_RT5133
+	REGULATOR_TYPE_VCAMA1,
+#endif
 	REGULATOR_TYPE_VCAMD,
 	REGULATOR_TYPE_VCAMIO,
 	REGULATOR_TYPE_MAX_NUM

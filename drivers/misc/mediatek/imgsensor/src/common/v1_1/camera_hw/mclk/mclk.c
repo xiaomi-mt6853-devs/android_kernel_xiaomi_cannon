@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -33,12 +32,13 @@ static enum IMGSENSOR_RETURN mclk_init(
 	int i;
 	int j;
 	char str_pinctrl_name[LENGTH_FOR_SNPRINTF];
+	int ret_snprintf = 0;
 
 	pinst->pmclk_mutex = &pcommon->pinctrl_mutex;
 
 	pinst->ppinctrl = devm_pinctrl_get(&pcommon->pplatform_device->dev);
 	if (IS_ERR(pinst->ppinctrl)) {
-		pr_debug("%s : Cannot find camera pinctrl!\n", __func__);
+		PK_PR_ERR("%s : Cannot find camera pinctrl!\n", __func__);
 		/* ret = IMGSENSOR_RETURN_ERROR; */
 		return IMGSENSOR_RETURN_ERROR;
 	}
@@ -48,18 +48,23 @@ static enum IMGSENSOR_RETURN mclk_init(
 		i++) {
 		for (j = MCLK_STATE_DISABLE; j < MCLK_STATE_MAX_NUM; j++) {
 			if (mclk_pinctrl[j].ppinctrl_names) {
-				snprintf(str_pinctrl_name,
+				ret_snprintf = snprintf(str_pinctrl_name,
 					sizeof(str_pinctrl_name),
 					"cam%d_mclk_%s",
 					i,
 					mclk_pinctrl[j].ppinctrl_names);
+				if (ret_snprintf < 0) {
+					pr_info(
+					"snprintf alloc error!, ret = %d", ret_snprintf);
+					return IMGSENSOR_RETURN_ERROR;
+				}
 				pinst->ppinctrl_state[i][j] =
 					pinctrl_lookup_state(pinst->ppinctrl,
 						str_pinctrl_name);
 
 				mutex_lock(pinst->pmclk_mutex);
 				if (IS_ERR(pinst->ppinctrl_state[i][j]))
-					pr_debug("%s : pinctrl warn, %s\n",
+					pr_debug("%s : pinctrl err, %s\n",
 						__func__,
 						str_pinctrl_name);
 				else {
@@ -136,6 +141,8 @@ static enum IMGSENSOR_RETURN mclk_set(
 	enum   IMGSENSOR_RETURN ret = IMGSENSOR_RETURN_SUCCESS;
 	enum MCLK_STATE state_index = MCLK_STATE_DISABLE;
 
+	if (sensor_idx < 0)
+		return IMGSENSOR_RETURN_ERROR;
 
 	if (pin_state < IMGSENSOR_HW_PIN_STATE_LEVEL_0 ||
 	    pin_state > IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH) {
@@ -145,24 +152,27 @@ static enum IMGSENSOR_RETURN mclk_set(
 		? pinst->drive_current[sensor_idx]
 		: MCLK_STATE_DISABLE;
 
+		if (state_index < 0)
+			return IMGSENSOR_RETURN_ERROR;
+
 		ppinctrl_state =
 			pinst->ppinctrl_state[sensor_idx][state_index];
-#if 0
-		pr_debug(
-			"%s : sensor_idx %d pinctrl, pin %d, pin_state %d, drive_current %d\n",
-			__func__,
-			sensor_idx,
-			pin,
-			pin_state,
-			pinst->drive_current[sensor_idx]);
+		/*
+		 * pr_debug(
+		 *	"%s : idx %d pin %d state %d driv_current %d\n",
+		 *	__func__,
+		 *	sensor_idx,
+		 *	pin,
+		 *	pin_state,
+		 *	pinst->drive_current[sensor_idx]);
+		 */
 
-#endif
 		mutex_lock(pinst->pmclk_mutex);
 
 		if (!IS_ERR(ppinctrl_state))
 			pinctrl_select_state(pinst->ppinctrl, ppinctrl_state);
 		else
-			pr_debug(
+			PK_PR_ERR(
 				"%s : sensor_idx %d pinctrl, PinIdx %d, Val %d, drive current %d\n",
 				__func__,
 				sensor_idx,

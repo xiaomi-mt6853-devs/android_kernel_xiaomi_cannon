@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -14,7 +13,7 @@
 
 #include <linux/atomic.h>
 #include "imgsensor_common.h"
-#include "imgsensor_platform.h"
+#include <imgsensor_platform.h>
 
 #ifndef __IMGSENSOR_CFG_TABLE_H__
 #define __IMGSENSOR_CFG_TABLE_H__
@@ -30,9 +29,11 @@ enum IMGSENSOR_HW_PIN {
 	IMGSENSOR_HW_PIN_PDN,
 	IMGSENSOR_HW_PIN_RST,
 	IMGSENSOR_HW_PIN_AVDD,
+#ifdef CONFIG_REGULATOR_RT5133
+	IMGSENSOR_HW_PIN_AVDD1,
+#endif
 	IMGSENSOR_HW_PIN_DVDD,
 	IMGSENSOR_HW_PIN_DOVDD,
-	IMGSENSOR_HW_PIN_AFVDD,
 #ifdef MIPI_SWITCH
 	IMGSENSOR_HW_PIN_MIPI_SWITCH_EN,
 	IMGSENSOR_HW_PIN_MIPI_SWITCH_SEL,
@@ -65,12 +66,15 @@ enum IMGSENSOR_HW_PIN_STATE {
 #define PDN         IMGSENSOR_HW_PIN_PDN
 #define RST         IMGSENSOR_HW_PIN_RST
 #define AVDD        IMGSENSOR_HW_PIN_AVDD
+#ifdef CONFIG_REGULATOR_RT5133
+#define AVDD1        IMGSENSOR_HW_PIN_AVDD1
+#endif
 #define DVDD        IMGSENSOR_HW_PIN_DVDD
 #define DOVDD       IMGSENSOR_HW_PIN_DOVDD
 #define VDD_None    IMGSENSOR_HW_PIN_NONE
 
 	/* For backward compatible */
-#define AFVDD       IMGSENSOR_HW_PIN_AFVDD
+#define AFVDD       IMGSENSOR_HW_PIN_UNDEF
 
 
 /* Voltage */
@@ -87,14 +91,7 @@ enum IMGSENSOR_HW_PIN_STATE {
 #define Vol_2800  IMGSENSOR_HW_PIN_STATE_LEVEL_2800
 #define Vol_2900  IMGSENSOR_HW_PIN_STATE_LEVEL_2900
 
-enum IMGSENSOR_HW_ID {
-	IMGSENSOR_HW_ID_MCLK,
-	IMGSENSOR_HW_ID_REGULATOR,
-	IMGSENSOR_HW_ID_GPIO,
 
-	IMGSENSOR_HW_ID_MAX_NUM,
-	IMGSENSOR_HW_ID_NONE = -1
-};
 
 #define IMGSENSOR_I2C_DRV_NAME_0  "kd_camera_hw"
 #define IMGSENSOR_I2C_DRV_NAME_1  "kd_camera_hw_bus2"

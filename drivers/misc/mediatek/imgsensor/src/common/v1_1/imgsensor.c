@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -707,7 +706,7 @@ static inline int adopt_CAMERA_HW_GetInfo2(void *pBuf)
 	PK_DBG("[%s]Entry%d\n", __func__, pSensorGetInfo->SensorId);
 
 	for (i = MSDK_SCENARIO_ID_CAMERA_PREVIEW;
-			i < MSDK_SCENARIO_ID_CUSTOM15;
+			i < MSDK_SCENARIO_ID_MAX;
 			i++) {
 		imgsensor_sensor_get_info(psensor, i, &info, &config);
 
@@ -2487,13 +2486,11 @@ static void __exit imgsensor_exit(void)
 {
 	platform_driver_unregister(&gimgsensor_platform_driver);
 }
-
-/* XIAOMI: libin16 change it, otherwise regulator_set_voltage
-   will occur KE when using i2c driver pm8008 or fan53870
-   etc. LDO chips
-*/
-//module_init(imgsensor_init);
-late_initcall(imgsensor_init);
+#ifdef NEED_LATE_INITCALL
+	late_initcall(imgsensor_init);
+#else
+	module_init(imgsensor_init);
+#endif
 module_exit(imgsensor_exit);
 
 MODULE_DESCRIPTION("image sensor driver");
