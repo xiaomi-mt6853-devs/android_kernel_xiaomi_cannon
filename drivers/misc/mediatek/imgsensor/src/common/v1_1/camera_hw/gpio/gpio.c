@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -22,10 +23,6 @@ struct GPIO_PINCTRL gpio_pinctrl_list_cam[
 	{"rst0"},
 	{"ldo_vcama_1"},
 	{"ldo_vcama_0"},
-#ifdef CONFIG_REGULATOR_RT5133
-	{"ldo_vcama1_1"},
-	{"ldo_vcama1_0"},
-#endif
 	{"ldo_vcamd_1"},
 	{"ldo_vcamd_0"},
 	{"ldo_vcamio_1"},
@@ -41,8 +38,6 @@ struct GPIO_PINCTRL gpio_pinctrl_list_switch[
 	{"cam_mipi_switch_sel_0"}
 };
 #endif
-
-extern void gpio_dump_regs(void);
 
 static struct GPIO gpio_instance;
 
@@ -60,7 +55,7 @@ static enum IMGSENSOR_RETURN gpio_init(
 
 	pgpio->ppinctrl = devm_pinctrl_get(&pcommon->pplatform_device->dev);
 	if (IS_ERR(pgpio->ppinctrl)) {
-		PK_PR_ERR("%s : Cannot find camera pinctrl!", __func__);
+		pr_debug("%s : Cannot find camera pinctrl!", __func__);
 		return IMGSENSOR_RETURN_ERROR;
 	}
 
@@ -72,17 +67,11 @@ static enum IMGSENSOR_RETURN gpio_init(
 			gpio_pinctrl_list_cam[i].ppinctrl_lookup_names;
 
 			if (lookup_names) {
-				ret = snprintf(str_pinctrl_name,
+				snprintf(str_pinctrl_name,
 				sizeof(str_pinctrl_name),
 				"cam%d_%s",
 				j,
 				lookup_names);
-				if (ret < 0)
-					pr_info(
-						"ERROR:%s, snprintf err, %d\n",
-						__func__,
-						ret);
-
 				pgpio->ppinctrl_state_cam[j][i] =
 					pinctrl_lookup_state(
 						pgpio->ppinctrl,
@@ -91,8 +80,8 @@ static enum IMGSENSOR_RETURN gpio_init(
 
 			if (pgpio->ppinctrl_state_cam[j][i] == NULL ||
 				IS_ERR(pgpio->ppinctrl_state_cam[j][i])) {
-				pr_info(
-					"ERROR: %s : pinctrl err, %s\n",
+				pr_debug(
+					"WARN: %s : pinctrl err, %s\n",
 					__func__,
 					str_pinctrl_name);
 				ret = IMGSENSOR_RETURN_ERROR;
@@ -110,7 +99,7 @@ static enum IMGSENSOR_RETURN gpio_init(
 
 		if (pgpio->ppinctrl_state_switch[i] == NULL ||
 			IS_ERR(pgpio->ppinctrl_state_switch[i])) {
-			PK_PR_ERR("%s : pinctrl err, %s\n", __func__,
+			pr_debug("%s : pinctrl err, %s\n", __func__,
 			gpio_pinctrl_list_switch[i].ppinctrl_lookup_names);
 			ret = IMGSENSOR_RETURN_ERROR;
 		}
@@ -143,11 +132,10 @@ static enum IMGSENSOR_RETURN gpio_set(
 #ifdef MIPI_SWITCH
 	    pin > IMGSENSOR_HW_PIN_MIPI_SWITCH_SEL ||
 #else
-		pin > IMGSENSOR_HW_PIN_DOVDD ||
+	   pin > IMGSENSOR_HW_PIN_DOVDD ||
 #endif
-		pin_state < IMGSENSOR_HW_PIN_STATE_LEVEL_0 ||
-		pin_state > IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH ||
-		sensor_idx < 0)
+	   pin_state < IMGSENSOR_HW_PIN_STATE_LEVEL_0 ||
+	   pin_state > IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH)
 		return IMGSENSOR_RETURN_ERROR;
 
 	gpio_state = (pin_state > IMGSENSOR_HW_PIN_STATE_LEVEL_0)
@@ -173,21 +161,11 @@ static enum IMGSENSOR_RETURN gpio_set(
 	if (ppinctrl_state != NULL && !IS_ERR(ppinctrl_state))
 		pinctrl_select_state(pgpio->ppinctrl, ppinctrl_state);
 	else
-		PK_PR_ERR("%s : pinctrl err, PinIdx %d, Val %d\n",
+		pr_debug("%s : pinctrl err, PinIdx %d, Val %d\n",
 			__func__, pin, pin_state);
 
 	mutex_unlock(pgpio->pgpio_mutex);
 
-	return IMGSENSOR_RETURN_SUCCESS;
-}
-
-static enum IMGSENSOR_RETURN gpio_dump(void *pintance)
-{
-#ifdef DUMP_GPIO
-	PK_DBG("[sensor_dump][gpio]\n");
-	gpio_dump_regs();
-	PK_DBG("[sensor_dump][gpio] finish\n");
-#endif
 	return IMGSENSOR_RETURN_SUCCESS;
 }
 
@@ -196,8 +174,7 @@ static struct IMGSENSOR_HW_DEVICE device = {
 	.pinstance = (void *)&gpio_instance,
 	.init      = gpio_init,
 	.set       = gpio_set,
-	.release   = gpio_release,
-	.dump      = gpio_dump
+	.release   = gpio_release
 };
 
 enum IMGSENSOR_RETURN imgsensor_hw_gpio_open(
