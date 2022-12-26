@@ -70,7 +70,7 @@ static kgid_t gid = KGIDT_INIT(1000);
 static DEFINE_SEMAPHORE(sem_mutex);
 
 static unsigned int interval = 1;	/* seconds, 0 : no auto polling */
-static int trip_temp[10] = { 120000, 110000, 100000, 90000, 80000,
+static int trip_temp[10] = { 100000, 96000, 95000, 90000, 80000,
 				70000, 65000, 60000, 55000, 50000 };
 
 static struct thermal_zone_device *thz_dev;
@@ -510,7 +510,7 @@ static __s32 mtkts_bts_thermistor_conver_temp(__s32 Res)
 	int i = 0;
 	int asize = 0;
 	__s32 RES1 = 0, RES2 = 0;
-	__s32 TAP_Value = -200, TMP1 = 0, TMP2 = 0;
+	__s32 TAP_Value = -2000, TMP1 = 0, TMP2 = 0;
 #ifdef APPLY_PRECISE_BTS_TEMP
 	TAP_Value = TAP_Value * 1000;
 #endif
@@ -520,12 +520,12 @@ static __s32 mtkts_bts_thermistor_conver_temp(__s32 Res)
 	 * asize = %d, Res = %d\n",asize,Res);
 	 */
 	if (Res >= BTS_Temperature_Table[0].TemperatureR) {
-		TAP_Value = -40;	/* min */
+		TAP_Value = -400;	/* min */
 #ifdef APPLY_PRECISE_BTS_TEMP
 		TAP_Value = TAP_Value * 1000;
 #endif
 	} else if (Res <= BTS_Temperature_Table[asize - 1].TemperatureR) {
-		TAP_Value = 125;	/* max */
+		TAP_Value = 1250;	/* max */
 #ifdef APPLY_PRECISE_BTS_TEMP
 		TAP_Value = TAP_Value * 1000;
 #endif
@@ -555,7 +555,7 @@ static __s32 mtkts_bts_thermistor_conver_temp(__s32 Res)
 		TAP_Value = mult_frac((((Res - RES2) * TMP1) +
 			((RES1 - Res) * TMP2)), 1000, (RES1 - RES2));
 #else
-		TAP_Value = (((Res - RES2) * TMP1) + ((RES1 - Res) * TMP2))
+		TAP_Value = (((Res - RES2) * TMP1) + ((RES1 - Res) * TMP2)) * 10
 								/ (RES1 - RES2);
 #endif
 	}
@@ -746,7 +746,7 @@ int mtkts_bts_get_hw_temp(void)
 	/* cat /sys/class/power_supply/AP/AP_temp */
 	t_ret = get_hw_bts_temp();
 #ifndef APPLY_PRECISE_BTS_TEMP
-	t_ret = t_ret * 1000;
+	t_ret = t_ret * 100;
 #endif
 	mutex_unlock(&BTS_lock);
 

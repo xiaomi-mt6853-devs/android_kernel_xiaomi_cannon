@@ -52,7 +52,7 @@ static int polling_factor1 = 5000;
 static int polling_factor2 = 10000;
 
 static unsigned int interval;	/* seconds, 0 : no auto polling */
-static unsigned int trip_temp[10] = { 120000, 110000, 100000, 90000, 80000,
+static unsigned int trip_temp[10] = { 1360000, 110000, 100000, 90000, 80000,
 					70000, 65000, 60000, 55000, 50000 };
 
 static unsigned int cl_dev_sysrst_state;

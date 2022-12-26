@@ -145,7 +145,7 @@ static int polling_factor2 = 10;
 static unsigned int cl_dev_state;
 static unsigned int cl_pa1_dev_state;
 static unsigned int cl_pa2_dev_state;
-static unsigned int g_trip_temp[COOLER_NUM] = { 125000, 115000, 105000, 85000,
+static unsigned int g_trip_temp[COOLER_NUM] = { 120000, 115000, 105000, 85000,
 							0, 0, 0, 0, 0, 0 };
 
 /* static int g_thro[COOLER_THRO_NUM] =

@@ -502,7 +502,7 @@ static __s32 mtkts_btsnrpa_thermistor_conver_temp(__s32 Res)
 	int i = 0;
 	int asize = 0;
 	__s32 RES1 = 0, RES2 = 0;
-	__s32 TAP_Value = -200, TMP1 = 0, TMP2 = 0;
+	__s32 TAP_Value = -2000, TMP1 = 0, TMP2 = 0;
 
 #ifdef APPLY_PRECISE_BTS_TEMP
 	TAP_Value = TAP_Value * 1000;
@@ -512,7 +512,7 @@ static __s32 mtkts_btsnrpa_thermistor_conver_temp(__s32 Res)
 	 * asize = %d, Res = %d\n", __func__,asize,Res);
 	 */
 	if (Res >= BTSNRPA_Temperature_Table[0].TemperatureR) {
-		TAP_Value = -40;	/* min */
+		TAP_Value = -400;	/* min */
 #ifdef APPLY_PRECISE_BTS_TEMP
 		TAP_Value = TAP_Value * 1000;
 #endif
@@ -550,7 +550,7 @@ static __s32 mtkts_btsnrpa_thermistor_conver_temp(__s32 Res)
 		TAP_Value = mult_frac((((Res - RES2) * TMP1) +
 			((RES1 - Res) * TMP2)), 1000, (RES1 - RES2));
 #else
-		TAP_Value = (((Res - RES2) * TMP1) + ((RES1 - Res) * TMP2))
+		TAP_Value = (((Res - RES2) * TMP1) + ((RES1 - Res) * TMP2)) * 10
 								/ (RES1 - RES2);
 #endif
 	}
@@ -752,7 +752,7 @@ int mtkts_btsnrpa_get_hw_temp(void)
 	/* cat /sys/class/power_supply/AP/AP_temp */
 	t_ret = get_hw_btsnrpa_temp();
 #ifndef APPLY_PRECISE_BTS_TEMP
-	t_ret = t_ret * 1000;
+	t_ret = t_ret * 100;
 #endif
 
 #if MTKTS_BTSNRPA_SW_FILTER
