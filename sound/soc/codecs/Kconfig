@@ -1287,4 +1287,8 @@ config SND_SOC_CS35L41
 	select SND_SOC_COMPRESS
 	depends on I2C
 
+# Awinic
+source "sound/soc/codecs/aw87359/Kconfig"
+source "sound/soc/codecs/aw87519/Kconfig"
+
 endmenu
