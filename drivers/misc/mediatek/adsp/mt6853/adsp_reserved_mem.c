@@ -8,7 +8,9 @@
 #include <linux/of.h>
 #include <linux/of_reserved_mem.h>
 #endif
+#if defined(CONFIG_MEDIATEK_EMI)
 #include <memory/mediatek/emi.h>
+#endif
 #include "adsp_reserved_mem.h"
 #include "adsp_feature_define.h"
 #include "adsp_platform.h"
@@ -75,7 +77,7 @@ size_t adsp_get_reserve_mem_size(enum adsp_reserve_mem_id_t id)
 
 void adsp_set_emimpu_shared_region(void)
 {
-#if ADSP_EMI_PROTECTION_ENABLE
+#if defined(CONFIG_MEDIATEK_EMI)
 	struct emimpu_region_t adsp_region;
 	struct adsp_reserve_mblock *mem = &adsp_reserve_mem;
 	int ret = 0;
@@ -94,14 +96,16 @@ void adsp_set_emimpu_shared_region(void)
 	if (ret < 0)
 		pr_info("%s fail to set emimpu protection\n", __func__);
 	mtk_emimpu_free_region(&adsp_region);
+#else
+	pr_info("%s(), emi config not enable", __func__);
 #endif
 }
 
 int adsp_mem_device_probe(struct platform_device *pdev)
 {
 	int ret = 0;
-	int i;
-	uint32_t size;
+	int i = 0;
+	uint32_t size = 0;
 	struct device *dev = &pdev->dev;
 
 	for (i = 0; i < ADSP_NUMS_MEM_ID; i++) {
@@ -136,7 +140,7 @@ void adsp_init_reserve_memory(void)
 	for (id = 0; id < ADSP_NUMS_MEM_ID; id++) {
 		adsp_reserve_mblocks[id].phys_addr = mem->phys_addr + acc_size;
 		adsp_reserve_mblocks[id].virt_addr = mem->virt_addr + acc_size;
-		acc_size += adsp_reserve_mblocks[id].size;
+		acc_size += ALIGN(adsp_reserve_mblocks[id].size, RSV_BLOCK_ALIGN);
 #ifdef MEM_DEBUG
 		pr_info("adsp_reserve_mblocks[%d] phys_addr:%llx, size:0x%zx\n",
 			id,
