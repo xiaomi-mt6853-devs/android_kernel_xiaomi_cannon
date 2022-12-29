@@ -3,7 +3,6 @@
 // Mediatek ALSA BT SCO CVSD/MSBC Driver
 //
 // Copyright (c) 2019 MediaTek Inc.
-// Copyright (C) 2021 XiaoMi, Inc.
 // Author: KaiChieh Chuang <kaichieh.chuang@mediatek.com>
 
 #include <linux/mfd/syscon.h>
@@ -674,7 +673,7 @@ static irqreturn_t mtk_btcvsd_snd_irq_handler(int irq_id, void *dev)
 irq_handler_exit:
 	*bt->bt_reg_ctl |= BT_CVSD_TX_UNDERFLOW;
 	*bt->bt_reg_ctl &= ~BT_CVSD_CLEAR;
-	dev_warn(bt->dev, "%s(), irq_handler_exit, bt_reg_ctl = 0x%x\n",
+	dev_warn(bt->dev, "%s(), irq_handler_exit, bt_reg_ctl = 0x%lx\n",
 		 __func__, *bt->bt_reg_ctl);
 
 	return IRQ_HANDLED;

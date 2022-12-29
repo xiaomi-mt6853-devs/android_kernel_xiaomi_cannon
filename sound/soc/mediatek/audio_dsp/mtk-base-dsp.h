@@ -46,7 +46,8 @@ struct mtk_base_dsp_mem {
 	struct audio_dsp_dram dsp_ring_share_buf;
 	unsigned char ipi_payload_buf[MAX_PAYLOAD_SIZE];
 	unsigned int dsp_feature_counter;
-	int underflowed;
+	int adsp_xrun_flag;
+	spinlock_t ringbuf_lock;
 };
 
 struct audio_core_flag {
@@ -81,6 +82,7 @@ struct mtk_base_dsp {
 	int (*release_dram_resource)(struct device *dev);
 
 	bool suspended;
+	int adsp_reset;
 	int dsp_dram_resource_counter;
 	struct mtk_dsp_ipi_ops dsp_ipi_ops;
 

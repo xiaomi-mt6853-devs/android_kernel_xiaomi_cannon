@@ -267,9 +267,11 @@ void RingBuf_writeDataValue(struct RingBuf *RingBuf1, const char value,
 void RingBuf_update_writeptr(struct RingBuf *RingBuf1, unsigned int count)
 {
 	if (count == 0 || count > RingBuf1->bufLen) {
+#ifdef RINGBUF_COUNT_CHECK
 		AUD_LOG_W("%s count[%u] datacount[%d] Len[%d]\n",
 			  __func__, count,
 			  RingBuf1->datacount, RingBuf1->bufLen);
+#endif
 		return;
 	}
 
@@ -337,10 +339,11 @@ void RingBuf_update_readptr(struct RingBuf *RingBuf1, unsigned int count)
 
 	/* handle buffer underflow*/
 	if (count > RingBuf1->datacount) {
+#ifdef RINGBUF_COUNT_CHECK
 		AUD_LOG_W("%s underflow count %u datacount %d Len %d\n",
 			   __func__, count,
 			   RingBuf1->datacount, RingBuf1->bufLen);
-
+#endif
 		if (RingBuf1->pWrite >= RingBuf1->pRead)
 			RingBuf1->datacount =
 			RingBuf1->pWrite - RingBuf1->pRead;
@@ -507,6 +510,11 @@ int set_audiobuffer_threshold(struct audio_hw_buffer *audio_hwbuf,
 {
 	int ret = 0;
 
+	if (audio_hwbuf == NULL) {
+		AUD_LOG_D("%s audio_hwbuf == NULL", __func__);
+		return -1;
+	}
+
 	audio_hwbuf->aud_buffer.start_threshold =
 		substream->runtime->start_threshold;
 	audio_hwbuf->aud_buffer.stop_threshold =
@@ -518,8 +526,7 @@ int set_audiobuffer_threshold(struct audio_hw_buffer *audio_hwbuf,
 }
 
 int set_afe_audio_pcmbuf(struct audio_hw_buffer *audio_hwbuf,
-			 struct snd_pcm_substream *substream,
-			 struct snd_pcm_hw_params *params)
+			 struct snd_pcm_substream *substream)
 {
 	int ret = 0;
 
@@ -538,13 +545,19 @@ int set_audiobuffer_attribute(struct audio_hw_buffer *audio_hwbuf,
 {
 	int ret = 0;
 
+	if (audio_hwbuf == NULL) {
+		AUD_LOG_D("%s audio_hwbuf == NULL", __func__);
+		return -1;
+	}
+
+	audio_hwbuf->aud_buffer.buffer_attr.direction = direction;
+
 	if (params == NULL)
 		return 0;
 
 	audio_hwbuf->aud_buffer.buffer_attr.channel = params_channels(params);
 	audio_hwbuf->aud_buffer.buffer_attr.format = params_format(params);
 	audio_hwbuf->aud_buffer.buffer_attr.rate = params_rate(params);
-	audio_hwbuf->aud_buffer.buffer_attr.direction = direction;
 
 	return ret;
 }
@@ -985,10 +998,12 @@ int sync_ringbuf_readidx(struct RingBuf *task_ring_buf,
 		datacount = task_ring_buf->bufLen -
 			    (task_ring_buf->pRead - readidx);
 
+#ifdef RINGBUF_COUNT_CHECK
 	if (datacount == 0 || datacount == task_ring_buf->bufLen) {
 		dump_rbuf_s(__func__, task_ring_buf);
 		dump_rbuf_bridge_s(__func__, buf_bridge);
 	}
+#endif
 
 	RingBuf_update_readptr(task_ring_buf, datacount);
 
@@ -1520,7 +1535,7 @@ static inline unsigned int get_sram_addr(unsigned int phyAdd)
 int RingBuf_Map_RingBuf_bridge(struct ringbuf_bridge *buf_bridge,
 			       struct RingBuf *pRingBuf)
 {
-	unsigned long phyaddr;
+	uint64_t phyaddr;
 
 	if (buf_bridge == NULL) {
 		AUD_LOG_D("%s buf_bridge == NULL\n", __func__);
@@ -1530,12 +1545,12 @@ int RingBuf_Map_RingBuf_bridge(struct ringbuf_bridge *buf_bridge,
 		AUD_LOG_D("%s RingBuf == NULL\n", __func__);
 		return -1;
 	}
-	phyaddr = (unsigned long)buf_bridge->pBufBase;
+	phyaddr = buf_bridge->pBufBase;
 
 	if (phyaddr > 0x20000000)
 		pRingBuf->pBufBase = (char *)ap_to_scp(phyaddr);
 	else
-		pRingBuf->pBufBase = (char *)get_sram_addr(phyaddr);
+		pRingBuf->pBufBase = (char *)get_sram_addr((uint32_t)phyaddr);
 
 	pRingBuf->bufLen = buf_bridge->bufLen;
 	pRingBuf->pBufEnd = pRingBuf->pBufBase + pRingBuf->bufLen;
