@@ -56,7 +56,6 @@ endif
     export MTK_WLAN_SERVICE=y
     export CONNAC_VER=1_0
     export WIFI_IP_SET=3
-    export BT_PLATFORM=connac1x
 
     # Do build-in for xxx.c checking
     subdir-ccflags-y += -D MTK_WCN_REMOVE_KERNEL_MODULE
