@@ -84,7 +84,7 @@ int atf_log_reserved_mem_of_init(struct reserved_mem *rmem)
 	atf_buf_len = (phys_addr_t) rmem->size;
 
 #ifdef ATF_LOGGER_DEBUG
-	pr_notice("%s, start: %pa, size: %pa\n",
+	pr_debug("%s, start: %pa, size: %pa\n",
 		ATF_LOG_RESERVED_MEMORY_KEY,
 		&atf_buf_phy_ctrl, &atf_buf_len);
 #endif
@@ -111,7 +111,7 @@ static ssize_t atf_log_write(struct file *file,
 	}
 
 #ifdef ATF_LOGGER_DEBUG
-	pr_notice("[%s]param:0x%lx, count:%zu, ret:%ld\n",
+	pr_debug("[%s]param:0x%lx, count:%zu, ret:%ld\n",
 		__func__, param, count, ret);
 #endif
 
@@ -207,7 +207,7 @@ static ssize_t atf_log_read(struct file *file,
 	mutex_lock(&atf_mutex);
 start:
 	while (1) {
-		/* pr_notice("atf_log_read: wait in wq\n"); */
+		/* pr_debug("atf_log_read: wait in wq\n"); */
 		wait_event_timeout(atf_log_wq,
 			(atf_buf_vir_ctrl->info.atf_write_offset !=
 			atf_buf_vir_ctrl->info.atf_read_offset), HZ);
@@ -224,7 +224,7 @@ start:
 	}
 
 	if (rc) {
-		pr_notice("%s: rc=%d\n", __func__, rc);
+		pr_debug("%s: rc=%d\n", __func__, rc);
 		/* do the work with the data you're protecting */
 		mutex_unlock(&atf_mutex);
 		return rc;
@@ -268,23 +268,23 @@ static long atf_log_ioctl(struct file *flip,
 #ifdef ATF_LOGGER_DEBUG
 void show_atf_log_ctl(void)
 {
-	pr_notice("ATF reserved memory, start: %pa, size: %pa\n",
+	pr_debug("ATF reserved memory, start: %pa, size: %pa\n",
 				&atf_buf_phy_ctrl, &atf_buf_len);
-	pr_notice("atf_buf_phy_ctrl: %pa\n", &atf_buf_phy_ctrl);
-	pr_notice("atf_buf_len: %pa\n", &atf_buf_len);
-	pr_notice("atf_buf_vir_ctrl: %pa\n", &atf_buf_vir_ctrl);
-	pr_notice("atf_log_vir_addr: %pa\n", &atf_log_vir_addr);
-	pr_notice("atf_log_len: %u\n", atf_log_len);
-	pr_notice("atf_log_addr(%pa) = 0x%x\n",
+	pr_debug("atf_buf_phy_ctrl: %pa\n", &atf_buf_phy_ctrl);
+	pr_debug("atf_buf_len: %pa\n", &atf_buf_len);
+	pr_debug("atf_buf_vir_ctrl: %pa\n", &atf_buf_vir_ctrl);
+	pr_debug("atf_log_vir_addr: %pa\n", &atf_log_vir_addr);
+	pr_debug("atf_log_len: %u\n", atf_log_len);
+	pr_debug("atf_log_addr(%pa) = 0x%x\n",
 			&(atf_buf_vir_ctrl->info.atf_log_addr),
 			atf_buf_vir_ctrl->info.atf_log_addr);
-	pr_notice("atf_log_size(%pa) = 0x%x\n",
+	pr_debug("atf_log_size(%pa) = 0x%x\n",
 			&(atf_buf_vir_ctrl->info.atf_log_size),
 			atf_buf_vir_ctrl->info.atf_log_size);
-	pr_notice("atf_write_offset(%pa) = %u\n",
+	pr_debug("atf_write_offset(%pa) = %u\n",
 			&(atf_buf_vir_ctrl->info.atf_write_offset),
 			atf_buf_vir_ctrl->info.atf_write_offset);
-	pr_notice("atf_read_offset(%pa) = %u\n",
+	pr_debug("atf_read_offset(%pa) = %u\n",
 			&(atf_buf_vir_ctrl->info.atf_read_offset),
 			atf_buf_vir_ctrl->info.atf_read_offset);
 }
@@ -296,7 +296,7 @@ static void show_data(unsigned long addr,
 	uint64_t nlines;
 	uint64_t *p = 0;
 
-	pr_notice("\n%s: %#lx:\n", name, addr);
+	pr_debug("\n%s: %#lx:\n", name, addr);
 
 	/*
 	 * round address down to a 32 bit boundary
@@ -311,14 +311,14 @@ static void show_data(unsigned long addr,
 		 * just display low 16 bits of address to keep
 		 * each line of the dump < 80 characters
 		 */
-		pr_notice("%#lx ", ((uintptr_t)p) & 0xffff);
+		pr_debug("%#lx ", ((uintptr_t)p) & 0xffff);
 		for (j = 0; j < 8; j++) {
 			u32	data;
 
 			if (probe_kernel_address((void *)p, data))
-				pr_notice(" ********");
+				pr_debug(" ********");
 			else
-				pr_notice(" %08x", data);
+				pr_debug(" %08x", data);
 			++p;
 		}
 		pr_debug("\n");
@@ -458,21 +458,21 @@ static int __init atf_logger_probe(struct platform_device *pdev)
 	u64 time_to_sync;
 	struct arm_smccc_res res;
 
-	pr_notice("atf_log: inited");
+	pr_debug("atf_log: inited");
 	if (atf_buf_len == 0) {
-		pr_info("No atf_log_buffer\n");
+		pr_debug("No atf_log_buffer\n");
 		return -1;
 	}
 
 	err = misc_register(&atf_log_dev);
 	if (unlikely(err)) {
-		pr_info("atf_log: failed to register device");
+		pr_debug("atf_log: failed to register device");
 		return -1;
 	}
 
 	err = misc_register(&atf_raw_buf_dev);
 	if (unlikely(err)) {
-		pr_info("atf_raw_buf: failed to register device");
+		pr_debug("atf_raw_buf: failed to register device");
 		return -1;
 	}
 
@@ -503,14 +503,14 @@ static int __init atf_logger_probe(struct platform_device *pdev)
 	/* create /proc/atf_log */
 	atf_log_proc_dir = proc_mkdir("atf_log", NULL);
 	if (atf_log_proc_dir == NULL) {
-		pr_info("atf_log proc_mkdir failed\n");
+		pr_debug("atf_log proc_mkdir failed\n");
 		return -ENOMEM;
 	}
 	/* create /proc/atf_log/atf_log */
 	atf_log_proc_file = proc_create("atf_log", 0440,
 		atf_log_proc_dir, &atf_log_fops);
 	if (atf_log_proc_file == NULL) {
-		pr_info("atf_log proc_create failed at atf_log\n");
+		pr_debug("atf_log proc_create failed at atf_log\n");
 		return -ENOMEM;
 	}
 
@@ -518,7 +518,7 @@ static int __init atf_logger_probe(struct platform_device *pdev)
 	atf_raw_buf_proc_file = proc_create("atf_raw_buf", 0440,
 		atf_log_proc_dir, &atf_raw_buf_fops);
 	if (atf_raw_buf_proc_file == NULL) {
-		pr_info("atf_raw_buf proc_create failed at atf_log\n");
+		pr_debug("atf_raw_buf proc_create failed at atf_log\n");
 		return -ENOMEM;
 	}
 
@@ -528,7 +528,7 @@ static int __init atf_logger_probe(struct platform_device *pdev)
 static void __exit atf_log_exit(void)
 {
 	misc_deregister(&atf_log_dev);
-	pr_notice("atf_log: exited");
+	pr_debug("atf_log: exited");
 }
 static int atf_logger_remove(struct platform_device *dev)
 {
@@ -556,7 +556,7 @@ static int __init atf_log_init(void)
 
 	ret = platform_driver_register(&atf_logger_driver_probe);
 	if (ret)
-		pr_info("atf logger init FAIL, ret 0x%x\n", ret);
+		pr_debug("atf logger init FAIL, ret 0x%x\n", ret);
 	return ret;
 }
 
