@@ -77,7 +77,7 @@ config USB_PD_VBUS_STABLE_TOUT
 config PD_DBG_INFO
 	bool "PD debug information"
 	depends on TCPC_CLASS
-	default y
+	default n
 	help
 	  Say Y to enable PD debug
 	  information
