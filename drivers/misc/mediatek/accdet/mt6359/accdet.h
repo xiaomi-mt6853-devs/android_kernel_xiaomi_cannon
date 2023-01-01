@@ -46,7 +46,7 @@
 #define PMIC_ACCDET_KERNEL         1
 #define PMIC_ACCDET_CTP            0
 
-#define PMIC_ACCDET_DEBUG          1
+#define PMIC_ACCDET_DEBUG          0
 #define PMIC_ACCDET_SUPPORT
 
 #define NO_KEY	(0x0)
