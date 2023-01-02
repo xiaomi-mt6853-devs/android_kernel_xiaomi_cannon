@@ -15,12 +15,10 @@ obj-y += ged/
 obj-y += hal/
 
 MTK_GPU_VERSION = $(subst ",,$(CONFIG_MTK_GPU_VERSION))
-$(info MTK_GPU_VERSION 1 = $(word 1,$(MTK_GPU_VERSION)))
 # GPU R5P0
 ifeq ($(CONFIG_MTK_GPU_R5P0),y)
     obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
 else ifeq ($(CONFIG_MACH_MT6781),y)
-    $(info *direct build mali-r32p1 for CONFIG_MACH_MT6781)
     obj-y += gpu_mali/mali_valhall/mali-r32p1/drivers/gpu/arm/midgard/
 else ifneq ($(word 1,$(MTK_GPU_VERSION)),)
     obj-y += gpu_$(word 1,$(MTK_GPU_VERSION))/

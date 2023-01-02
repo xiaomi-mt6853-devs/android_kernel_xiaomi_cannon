@@ -28,7 +28,6 @@ ifeq ($(CONFIG_FTRACE),y)
     endif
 endif
 
-$(info ******** Start to built in met_drv for $(MTK_PLATFORM) ********)
 ifneq ($(MET_PLF_DIR),)
     ifeq ($(FTRACE_READY),y)
         include $(MET_COMMON_DIR)/Kbuild
