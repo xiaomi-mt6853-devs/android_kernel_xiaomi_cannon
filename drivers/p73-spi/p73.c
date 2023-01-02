@@ -109,9 +109,9 @@ enum P61_DEBUG_LEVEL {
 /* Variable to store current debug level request by ioctl */
 static unsigned char debug_level;
 
-#define P61_DBG_MSG(msg...)	printk(KERN_ERR "[NXP-P61] :  " msg);
+#define P61_DBG_MSG(msg...)	pr_debug(KERN_ERR "[NXP-P61] :  " msg);
 
-#define P61_ERR_MSG(msg...) printk(KERN_ERR "[NFC-P61] : " msg);
+#define P61_ERR_MSG(msg...) pr_debug(KERN_ERR "[NFC-P61] : " msg);
 
 /* Device specific macro and structure */
 struct p61_dev {
