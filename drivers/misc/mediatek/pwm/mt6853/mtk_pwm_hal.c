@@ -204,12 +204,12 @@ void mt_set_pwm_clk_hal(u32 pwm_no, u32 clksrc, u32 div)
 		CLRREG32(reg_con, 1 << PWM_CON_CLKSEL_OLD_OFFSET);
 		if (clksrc == CLK_BLOCK) {
 			CLRREG32(reg_con, 1 << PWM_CON_CLKSEL_OFFSET);
-			pr_info("%s: PWM new clock set 26M!\n", __func__);
+			pr_debug("%s: PWM new clock set 26M!\n", __func__);
 		} else if (clksrc == CLK_BLOCK_BY_1625_OR_32K) {
 			SETREG32(reg_con, 1 << PWM_CON_CLKSEL_OFFSET);
-			pr_info("%s: PWM new clock set 26M/1625!\n", __func__);
+			pr_debug("%s: PWM new clock set 26M/1625!\n", __func__);
 		} else
-			pr_info("clksrc(%u) set err\n", clksrc);
+			pr_debug("clksrc(%u) set err\n", clksrc);
 	}
 }
 
@@ -447,6 +447,7 @@ void mt_set_pwm_buf0_size_hal(u32 pwm_no, uint16_t size)
 
 void mt_pwm_dump_regs_hal(void)
 {
+#ifdef DEBUG
 	int i = 0;
 	unsigned long reg_val = 0;
 
@@ -499,7 +500,7 @@ void mt_pwm_dump_regs_hal(void)
 	reg_val = INREG32(PWM_EN_STATUS);
 	pr_info("[PWM_EN_STATUS]: 0x%lx\n ", reg_val);
 	pr_info("=========> [PWM DUMP RG END] <=========\n ");
-
+#endif
 }
 
 void pwm_debug_store_hal(void)
@@ -510,7 +511,9 @@ void pwm_debug_store_hal(void)
 
 void pwm_debug_show_hal(void)
 {
+#ifdef DEBUG
 	mt_pwm_dump_regs_hal();
+#endif
 }
 
 /*----------3dLCM support-----------*/
@@ -558,7 +561,7 @@ void mt_pwm_26M_clk_enable_hal(u32 enable)
 void mt_pwm_clk_sel_hal(u32 pwm_no, u32 clk_src)
 {
 	if (pwm_no > PWM_MAX)
-		pr_info("PWM: invalid pwm_no\n");
+		pr_err("PWM: invalid pwm_no\n");
 	switch (clk_src) {
 	/* 32K */
 	case 0x00:
@@ -587,7 +590,7 @@ void mt_pwm_clk_sel_hal(u32 pwm_no, u32 clk_src)
 		SETREG32(PWM_CLK_SRC_CTRL, 0x3 << PWM_BCLK_SW_CTRL_OFFSET);
 		break;
 	default:
-		pr_info("PWM: invalid clk_src\n");
+		pr_err("PWM: invalid clk_src\n");
 	}
 }
 
