@@ -9,13 +9,6 @@ menuconfig INPUT_TOUCHSCREEN
 
 	  If unsure, say Y.
 
-source "drivers/input/touchscreen/mediatek/Kconfig"
-source "drivers/input/touchscreen/xiaomi-spi-tp/Kconfig"
-source "drivers/input/touchscreen/NT36672A/Kconfig"
-source "drivers/input/touchscreen/fts8719/Kconfig"
-
-source "drivers/input/touchscreen/NT36672C/Kconfig"
-
 if INPUT_TOUCHSCREEN
 
 config TOUCHSCREEN_PROPERTIES
@@ -1259,5 +1252,11 @@ config TOUCHSCREEN_MTK_TOUCH
          Set touch IC name if you have touch panel.
 
          To compile this dirver for used touch IC.
+
+source "drivers/input/touchscreen/mediatek/Kconfig"
+source "drivers/input/touchscreen/xiaomi-spi-tp/Kconfig"
+source "drivers/input/touchscreen/NT36672A/Kconfig"
+source "drivers/input/touchscreen/fts8719/Kconfig"
+source "drivers/input/touchscreen/NT36672C/Kconfig"
 
 endif
