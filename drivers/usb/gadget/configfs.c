@@ -1782,7 +1782,7 @@ static void do_usb_state_monitor_work(struct work_struct *work)
 		usb_state = "DISCONNECTED";
 	spin_unlock_irqrestore(&cdev->lock, flags);
 
-	pr_info("usb_state<%s>\n", usb_state);
+	pr_debug("usb_state<%s>\n", usb_state);
 	schedule_delayed_work(&usb_state_monitor_dw,
 			msecs_to_jiffies(USB_STATE_MONITOR_DELAY));
 }
