@@ -1163,7 +1163,7 @@ void mtkts_lcd_prepare_table(int table_num)
 		break;
 	}
 
-	pr_notice("[Thermal/TZ/LCD] %s table_num=%d\n",
+	pr_debug("[Thermal/TZ/LCD] %s table_num=%d\n",
 						__func__, table_num);
 
 #if 0
