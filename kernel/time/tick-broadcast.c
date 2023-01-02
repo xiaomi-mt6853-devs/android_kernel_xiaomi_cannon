@@ -24,17 +24,6 @@
 
 #include "tick-internal.h"
 
-#define CONFIG_MTK_TICK_BROADCAST_AEE_DUMP
-
-#if defined(CONFIG_MTK_RAM_CONSOLE)
-#if defined(CONFIG_MTK_TICK_BROADCAST_AEE_DUMP)
-#include <linux/cpumask.h>
-#include <mt-plat/mtk_ram_console.h>
-
-#define _MTK_TICK_BROADCAST_AEE_DUMP
-#endif
-#endif
-
 /*
  * Broadcast support for broken x86 hardware, where the local apic
  * timer stops in C3 state.
