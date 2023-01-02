@@ -180,7 +180,6 @@ ccflags-y += -D CFG_WMT_EVB
 endif
 
 KERNEL_VERSION_SUPPORT_CHIPID_LIST := $(patsubst %Y,%,$(patsubst %N,,$(patsubst %Ny,%Y,$(foreach chipid,$(patsubst mt%.c,%,$(notdir $(wildcard $(KO_CODE_PATH)/common_main/platform/mt[0-9][0-9][0-9][0-9].c))),$(chipid)N$(CONFIG_MTK_COMBO_CHIP_CONSYS_$(chipid))))))
-$(warning KERNEL_VERSION_SUPPORT_CHIPID_LIST=[$(KERNEL_VERSION_SUPPORT_CHIPID_LIST)])
 
 ifeq ($(KERNEL_VERSION_SUPPORT_CHIPID_LIST),)
 ifneq ($(CONNSYS_PLATFORM),)
