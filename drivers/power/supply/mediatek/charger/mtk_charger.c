@@ -290,7 +290,7 @@ int charger_manager_enable_high_voltage_charging(
 	else if (en && consumer->hv_charging_disabled == true)
 		consumer->hv_charging_disabled = false;
 	else {
-		pr_info("[%s] already set: %d %d\n", __func__,
+		pr_warn("[%s] already set: %d %d\n", __func__,
 			consumer->hv_charging_disabled, en);
 		return 0;
 	}
@@ -306,9 +306,6 @@ int charger_manager_enable_high_voltage_charging(
 			info->enable_hv_charging = true;
 	}
 	mutex_unlock(&consumer_mutex);
-
-	pr_info("%s: user: %s, en = %d\n", __func__, dev_name(consumer->dev),
-		info->enable_hv_charging);
 
 	if (mtk_pe50_get_is_connect(info) && !info->enable_hv_charging)
 		mtk_pe50_stop_algo(info, true);
@@ -357,7 +354,7 @@ int charger_manager_enable_power_path(struct charger_consumer *consumer,
 		goto out;
 	}
 
-	pr_info("%s: enable power path = %d\n", __func__, en);
+	pr_debug("%s: enable power path = %d\n", __func__, en);
 	ret = charger_dev_enable_powerpath(chg_dev, en);
 out:
 	mutex_unlock(&info->pp_lock[idx]);
@@ -700,13 +697,13 @@ int charger_manager_get_ibus(int *ibus)
 
 int charger_manager_set_input_suspend(int suspend)
 {
-	pr_info("%s suspend: %d.\n", __func__, suspend);
+	pr_debug("%s suspend: %d.\n", __func__, suspend);
 
 	if (pinfo == NULL)
 		return false;
 
 	if (pinfo->is_input_suspend == suspend) {
-		pr_info("%s same setting, return.\n", __func__);
+		pr_debug("%s same setting, return.\n", __func__);
 		return false;
 	}
 
@@ -773,9 +770,6 @@ void charger_manager_set_prop_system_temp_level(int temp_level)
 
 	if (pinfo->system_temp_level == 0)
 		thermal_icl_ua = -1;
-
-	pr_info("%s, system_temp_level:%d thermal_icl_ua:%d usb_type:%d\n", __func__,
-			pinfo->system_temp_level, thermal_icl_ua, pinfo->usb_psy->desc->type);
 
 	_charger_manager_set_input_current_limit(pinfo, MAIN_CHARGER, thermal_icl_ua);
 }
@@ -961,7 +955,7 @@ void mtk_charger_get_atm_mode(struct charger_manager *info)
 			info->atm_enabled = false;
 	} else
 		info->atm_enabled = false;
-	pr_info("%s: atm_enabled = %d\n", __func__, info->atm_enabled);
+	pr_debug("%s: atm_enabled = %d\n", __func__, info->atm_enabled);
 }
 
 /* internal algorithm common function */
@@ -1029,13 +1023,13 @@ static int smblib_get_quick_charge_type(struct charger_manager *info)
 	}
 
 	if (!mt_charger_plugin()) {
-		pr_info("%s: mt_charger_plugin false.\n", __func__);
+		pr_err("%s: mt_charger_plugin false.\n", __func__);
 		return 0;
 	}
 
 	power_supply_get_property(info->usb_psy,
 			POWER_SUPPLY_PROP_REAL_TYPE, &pval);
-	pr_info("Get real type:%d.\n", pval.intval);
+	pr_debug("Get real type:%d.\n", pval.intval);
 
 	while (adapter_cap[i].adap_type != 0) {
 		if (pval.intval == adapter_cap[i].adap_type) {
@@ -1623,7 +1617,7 @@ static void mtk_float_retry_work(struct work_struct *work)
 	if (ret < 0)
 		chr_err("%s: en chgdet fail\n", __func__);
 
-	pr_info("%s rerun bc12 check for float.\n", __func__);
+	pr_debug("%s rerun bc12 check for float.\n", __func__);
 }
 
 bool reboot_first_flag = true;
@@ -2231,8 +2225,6 @@ static void mtk_conn_therm_work(struct work_struct *work)
 	power_supply_get_property(info->usb_psy,
 		POWER_SUPPLY_PROP_CONNECTOR_TEMP, &val);
 	info->connector_temp = val.intval;
-	pr_info("%s connector_temp = %d\n",
-			__func__, info->connector_temp);
 
 	if ((info->connector_temp >=  CONNECTOR_THERM_TOO_HIG)) {
 		pr_debug("chg->connector_temp:%d is too hig\n",
