@@ -25,19 +25,12 @@
 #include "mtk_spower_data.h"
 
 #define SP_TAG "[Power/spower] "
-#define SPOWER_LOG_NONE 0
-#define SPOWER_LOG_WITH_PRINTK 1
 
 /* #define SPOWER_LOG_PRINT SPOWER_LOG_WITH_PRINTK */
 #define SPOWER_LOG_PRINT SPOWER_LOG_NONE
 
 #define SPOWER_ERR(fmt, args...) pr_err(SP_TAG fmt, ##args)
-
-#if (SPOWER_LOG_PRINT == SPOWER_LOG_NONE)
-#define SPOWER_INFO(fmt, args...)
-#elif (SPOWER_LOG_PRINT == SPOWER_LOG_WITH_PRINTK)
-#define SPOWER_INFO(fmt, args...) pr_emerg(SP_TAG fmt, ##args)
-#endif
+#define SPOWER_INFO(fmt, args...) pr_debug(SP_TAG fmt, ##args)
 
 static struct sptab_s sptab[MTK_SPOWER_MAX];
 static char static_power_buf[128];
