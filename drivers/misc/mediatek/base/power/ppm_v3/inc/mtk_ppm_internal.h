@@ -115,22 +115,11 @@ static const struct file_operations ppm_ ## name ## _proc_fops = {            \
 #undef TAG
 #define TAG     "[Power/PPM] "
 
-#define ppm_err			ppm_info
-#define ppm_warn		ppm_info
-#define ppm_info(fmt, args...)	pr_notice(TAG""fmt, ##args)
-#define ppm_dbg(type, fmt, args...)				\
-	do {							\
-		if (ppm_debug & ALL || ppm_debug & type)	\
-			ppm_info(fmt, ##args);			\
-		else if (type == MAIN)				\
-			pr_debug(TAG""fmt, ##args);		\
-	} while (0)
-#define ppm_ver(fmt, args...)			\
-	do {					\
-		if (ppm_debug == ALL)		\
-			ppm_info(fmt, ##args);	\
-	} while (0)
-
+#define ppm_err(fmt, args...) pr_err(TAG""fmt, ##args)
+#define ppm_warn(fmt, args...) pr_warn(TAG""fmt, ##args)
+#define ppm_info(fmt, args...)
+#define ppm_dbg(type, fmt, args...)
+#define ppm_ver(fmt, args...)
 
 #define FUNC_LV_MODULE		BIT(0)	/* module, platform driver interface */
 #define FUNC_LV_API		BIT(1)	/* mt_ppm driver global function */

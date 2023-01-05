@@ -170,8 +170,9 @@ static ssize_t qos_bound_log_enable_store(struct device *dev,
 	if (kstrtoint(buf, 10, &val))
 		return -EINVAL;
 
+#ifdef DEBUG
 	qos_bound_log_enable(val);
-
+#endif
 	return count;
 }
 static DEVICE_ATTR(qos_bound_log_enable, 0644,
