@@ -1812,10 +1812,10 @@ static ssize_t								\
 field ## _store(struct device *dev, struct device_attribute *attr,	\
 		const char *buf, size_t size)				\
 {									\
-	if (size >= MAX_USB_STRING_LEN)					\
+	if (size >= USB_MAX_STRING_LEN)					\
 		return -EINVAL;						\
 	pr_info("%s %s len=%zu\n", __func__, buf, size); \
-	return strlcpy(buffer, buf, MAX_USB_STRING_LEN); \
+	return strlcpy(buffer, buf, USB_MAX_STRING_LEN); \
 }									\
 static DEVICE_ATTR(field, 0644, field ## _show, field ## _store)
 
@@ -1867,7 +1867,7 @@ static int android_device_create(struct gadget_info *gi)
 	if (IS_ERR(android_device))
 		return PTR_ERR(android_device);
 
-	serial_string = kzalloc(sizeof(char)*MAX_USB_STRING_WITH_NULL_LEN,
+	serial_string = kzalloc(sizeof(char)*USB_MAX_STRING_WITH_NULL_LEN,
 			GFP_KERNEL);
 	serial_string[0] = '\0';
 

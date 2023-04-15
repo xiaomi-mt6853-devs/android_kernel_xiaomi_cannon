@@ -310,7 +310,7 @@ drop:
 
 int udp_v4_early_demux(struct sk_buff *);
 int tcp_v4_early_demux(struct sk_buff *);
-static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
+static int ip_rcv_finish_core(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct net_device *dev = skb->dev;
