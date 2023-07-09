@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -481,13 +482,8 @@ done:
 		}
 	}
 
-	ret = charger_dev_get_min_charging_current(info->chg1_dev, &ichg1_min);
-	if (ret < 0)
-		chr_err("charger_dev_get_min_charging_current not support.");
-
-	ret = charger_dev_get_min_input_current(info->chg1_dev, &aicr1_min);
-	if (ret < 0)
-		chr_err("charger_dev_get_min_charging_current not support.");
+	charger_dev_get_min_charging_current(info->chg1_dev, &ichg1_min);
+	charger_dev_get_min_input_current(info->chg1_dev, &aicr1_min);
 
 	/*
 	 * If thermal current limit is larger than charging IC's minimum

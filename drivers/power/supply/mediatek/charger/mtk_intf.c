@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -78,12 +79,6 @@ int charger_enable_termination(bool en)
 int charger_enable_powerpath(bool en)
 {
 	return charger_dev_enable_powerpath(pinfo->chg1_dev, en);
-}
-
-int charger_force_disable_powerpath(bool disable)
-{
-	return charger_manager_force_disable_power_path(pinfo->chg1_consumer,
-							MAIN_CHARGER, disable);
 }
 
 int charger_dump_registers(void)
@@ -213,12 +208,9 @@ int adapter_get_cap(struct pd_cap *cap)
 int adapter_is_support_pd(void)
 {
 	if (pinfo->pd_type == MTK_PD_CONNECT_PE_READY_SNK ||
+		pinfo->pd_type == MTK_PD_CONNECT_PE_READY_SNK_PD30 ||
+		pinfo->pd_type == MTK_PD_CONNECT_PE_READY_SNK_APDO ||
 		pinfo->pd_type == MTK_PD_CONNECT_PE_READY_SNK_PD30)
-		return true;
-
-	if (pinfo->pd_type == MTK_PD_CONNECT_PE_READY_SNK_APDO &&
-		pinfo->enable_pe_4 == false &&
-		pinfo->enable_pe_5 == false)
 		return true;
 
 	return false;

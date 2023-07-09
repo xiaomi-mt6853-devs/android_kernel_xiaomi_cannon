@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -18,7 +19,7 @@
 #include <linux/slab.h>
 #include "mtk_intf.h"
 
-#define PD_MIN_WATT 5000000
+#define PD_MIN_WATT 1000000
 #define PD_VBUS_IR_DROP_THRESHOLD 1200
 
 static struct pdc *pd;
@@ -365,9 +366,7 @@ reset:
 int pdc_check_leave(void)
 {
 	struct pd_cap *cap;
-	int ibus = 0, vbus = 0;
-	unsigned int mivr1 = 0;
-	bool mivr_state = false;
+	int ibus = 0;
 	int max_mv = 0;
 
 	cap = &pd->cap;
@@ -375,20 +374,11 @@ int pdc_check_leave(void)
 
 	charger_get_ibus(&ibus);
 	ibus = ibus / 1000;
-	vbus = battery_get_vbus();
-	charger_get_mivr_state(&mivr_state);
-	charger_get_mivr(&mivr1);
+	chr_err("[%s]mv:%d ibus:%d idx:%d min_watt:%d\n",
+			__func__, max_mv, ibus, pd->pd_idx, PD_MIN_WATT);
 
-	chr_err("[%s]mv:%d vbus:%d ibus:%d idx:%d min_watt:%d mivr:%d mivr_state:%d\n",
-		__func__, max_mv, vbus, ibus, pd->pd_idx,
-		PD_MIN_WATT, mivr1 / 1000, mivr_state);
-
-	if (max_mv * ibus <= PD_MIN_WATT) {
-		if (mivr_state)
-			chr_err("[%s] MIVR occurred, ibus can't draw much higher current",
-				__func__);
+	if (max_mv * ibus <= PD_MIN_WATT)
 		goto leave;
-	}
 
 	return 0;
 
