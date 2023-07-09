@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -53,7 +52,7 @@
 #define SHUTDOWN_TIME 40
 #define AVGVBAT_ARRAY_SIZE 30
 #define INIT_VOLTAGE 3450
-#define BATTERY_SHUTDOWN_TEMPERATURE 70
+#define BATTERY_SHUTDOWN_TEMPERATURE 60
 
 /* ============================================================ */
 /* typedef and Struct*/
@@ -668,13 +667,6 @@ struct battery_data {
 	/* Add for Battery Service */
 	int BAT_batt_vol;
 	int BAT_batt_temp;
-	bool CHG_FULL_STATUS;
-};
-
-struct bms_data {
-	struct power_supply_desc psd;
-	struct power_supply *psy;
-	struct power_supply_config cfg;
 };
 
 struct BAT_EC_Struct {
@@ -999,8 +991,6 @@ extern void bmd_ctrl_cmd_from_user(void *nl_data, struct fgd_nl_msg_t *ret_msg);
 extern int interpolation(int i1, int b1, int i2, int b2, int i);
 extern struct mtk_battery *get_mtk_battery(void);
 extern void battery_update_psd(struct battery_data *bat_data);
-extern int wakeup_fg_algo(unsigned int flow_state);
-extern int wakeup_fg_algo_cmd(unsigned int flow_state, int cmd, int para1);
 extern int wakeup_fg_algo_atomic(unsigned int flow_state);
 extern unsigned int TempToBattVolt(int temp, int update);
 extern int fg_get_battery_temperature_for_zcv(void);
@@ -1082,9 +1072,6 @@ extern int gauge_enable_interrupt(int intr_number, int en);
 /* GM25 Plug out API */
 int en_intr_VBATON_UNDET(int en);
 int reg_VBATON_UNDET(void (*callback)(void));
-
-/*Get batt resistance */
-extern int battery_get_bat_resistance_id(void);
 
 /* zcvf */
 int zcv_filter_add(struct zcv_filter *zf);
