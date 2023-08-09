@@ -15,7 +15,9 @@
 #include "adsp_mbox.h"
 #include "adsp_reserved_mem.h"
 #include "adsp_logger.h"
+#ifdef CONFIG_MTK_AEE_FEATURE
 #include "adsp_excep.h"
+#endif
 #include "adsp_reg.h"
 #include "adsp_platform.h"
 #include "adsp_platform_driver.h"
@@ -83,10 +85,12 @@ int adsp_core0_init(struct adsp_priv *pdata)
 
 	adsp_update_mpu_memory_info(pdata);
 
+#ifdef CONFIG_MTK_AEE_FEATURE
 	/* exception init & irq */
 	init_adsp_exception_control(adsp_wq, &adsp_waitq);
 	adsp_irq_registration(pdata->id, ADSP_IRQ_WDT_ID, adsp_wdt_handler,
 			      pdata);
+#endif
 
 	/* logger */
 	pdata->log_ctrl = adsp_logger_init(ADSP_A_LOGGER_MEM_ID);
@@ -184,7 +188,9 @@ int adsp_core0_suspend(void)
 	return 0;
 ERROR:
 	pr_warn("%s(), can't going to suspend, ret(%d)\n", __func__, ret);
+#ifdef CONFIG_MTK_AEE_FEATURE
 	adsp_aed_dispatch(EXCEP_KERNEL, pdata);
+#endif
 	return ret;
 }
 
@@ -208,7 +214,9 @@ int adsp_core0_resume(void)
 
 		if (get_adsp_state(pdata) != ADSP_RUNNING) {
 			pr_warn("%s, can't going to resume\n", __func__);
+#ifdef CONFIG_MTK_AEE_FEATURE
 			adsp_aed_dispatch(EXCEP_KERNEL, pdata);
+#endif
 			return -ETIME;
 		}
 	}
@@ -251,10 +259,12 @@ static const struct of_device_id adsp_common_of_ids[] = {
 	{}
 };
 
+#ifdef CONFIG_MTK_AEE_FEATURE
 const struct attribute_group *adsp_common_attr_groups[] = {
 	&adsp_excep_attr_group,
 	NULL,
 };
+#endif
 
 const struct attribute_group *adsp_core_attr_groups[] = {
 	&adsp_default_attr_group,
@@ -264,7 +274,9 @@ const struct attribute_group *adsp_core_attr_groups[] = {
 static struct miscdevice adsp_common_device = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "adsp",
+#ifdef CONFIG_MTK_AEE_FEATURE
 	.groups = adsp_common_attr_groups,
+#endif
 	.fops = &adsp_common_file_ops,
 };
 

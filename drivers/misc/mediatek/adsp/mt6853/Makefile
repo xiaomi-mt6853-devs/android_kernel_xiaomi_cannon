@@ -12,7 +12,7 @@ obj-y += adsp_clk.o
 obj-y += adsp_reserved_mem.o
 obj-y += adsp_platform_driver.o adsp_platform.o
 obj-y += adsp_mbox.o
-obj-y += adsp_excep.o
+obj-$(CONFIG_MTK_AEE_FEATURE) += adsp_excep.o
 
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/adsp/common
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/audio_ipi/common/framework

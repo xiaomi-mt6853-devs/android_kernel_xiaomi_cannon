@@ -39,7 +39,9 @@
 #include <adsp_ipi_queue.h>
 #include <audio_ipi_platform.h>
 #include "adsp_helper.h"
+#ifdef CONFIG_MTK_AEE_FEATURE
 #include "adsp_excep.h"
+#endif
 #include "adsp_dvfs.h"
 #include "adsp_clk.h"
 #include "adsp_reg.h"
