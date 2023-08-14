@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2020 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -71,10 +72,10 @@ static int mtkts_btsmdpa_debug_log;
 static int kernelmode;
 static int g_THERMAL_TRIP[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
-static int num_trip;
-static char g_bind0[20] = {"mtk-cl-shutdown02"};
-static char g_bind1[20] = { 0 };
-static char g_bind2[20] = { 0 };
+static int num_trip = 3;
+static char g_bind0[20] = {"mtk-cl-kshutdown00"};
+static char g_bind1[20] = {"mtk-cl-mdoff"};
+static char g_bind2[20] = {"mtk-cl-noIMS"};
 static char g_bind3[20] = { 0 };
 static char g_bind4[20] = { 0 };
 static char g_bind5[20] = { 0 };
