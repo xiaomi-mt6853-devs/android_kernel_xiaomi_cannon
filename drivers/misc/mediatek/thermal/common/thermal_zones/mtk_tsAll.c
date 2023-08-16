@@ -66,7 +66,7 @@ struct cooler_data {
 static struct cooler_data g_coolerData[RESERVED_TZS];
 #endif
 
-static int tsallts_debug_log;
+static int tsallts_debug_log = 0;
 
 #define TSALLTS_TEMP_CRIT 120000	/* 120.000 degree Celsius */
 

@@ -66,7 +66,7 @@ static int trip_temp[10] = { 120000, 110000, 100000, 90000, 80000,
 				70000, 65000, 60000, 55000, 50000 };
 
 static struct thermal_zone_device *thz_dev;
-static int mtkts_quite_debug_log=1;
+static int mtkts_quite_debug_log = 0;
 static int kernelmode;
 static int g_THERMAL_TRIP[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
@@ -1163,7 +1163,7 @@ void mtkts_quite_prepare_table(int table_num)
 		break;
 	}
 
-	pr_notice("[Thermal/TZ/QUITE] %s table_num=%d\n",
+	pr_debug("[Thermal/TZ/QUITE] %s table_num=%d\n",
 						__func__, table_num);
 
 #if 0

@@ -69,7 +69,7 @@ static DEFINE_SEMAPHORE(sem_mutex);
 
 static unsigned int interval = 1;	/* seconds, 0 : no auto polling */
 static struct thermal_zone_device *thz_dev;
-static int mtkts_dctm_debug_log;
+static int mtkts_dctm_debug_log = 0;
 static int kernelmode;
 static int num_trip = 1;
 static int trip_temp[10] = { 120000, 110000, 100000, 90000,
@@ -290,7 +290,7 @@ static int mtkts_dctm_get_temp(struct thermal_zone_device *thermal, int *t)
 	}
 
 	if (t_ret < 0)
-		pr_notice("%s, wakeup_ta_algo out of memory\n", __func__);
+		pr_err("%s, wakeup_ta_algo out of memory\n", __func__);
 
 	if ((int)*t >= polling_trip_temp1)
 		thermal->polling_delay = interval * 1000;
@@ -979,7 +979,7 @@ static int __init mtkts_dctm_init(void)
 #ifdef CONFIG_PM
 	ret = register_pm_notifier(&dctm_pm_notifier_func);
 	if (ret)
-		pr_notice("Failed to register dctm PM notifier.\n");
+		pr_err("Failed to register dctm PM notifier.\n");
 #endif
 	return 0;
 }

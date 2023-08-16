@@ -75,7 +75,7 @@ static struct thermal_zone_device *thz_dev;
 static unsigned int cl_dev_sysrst_state;
 static struct thermal_cooling_device *cl_dev_sysrst;
 
-static int mtktscharger_debug_log;
+static int mtktscharger_debug_log = 0;
 
 /* This is to preserve last temperature readings from charger driver.
  * In case mtk_ts_charger.c fails to read temperature.
@@ -859,7 +859,7 @@ void mtkts_btscharger_prepare_table(int table_num)
 		break;
 	}
 
-	pr_notice("[Thermal/TZ/BTSCHARGER] %s table_num=%d\n",
+	pr_debug("[Thermal/TZ/BTSCHARGER] %s table_num=%d\n",
 						__func__, table_num);
 }
 static int mtktscharger_read(struct seq_file *m, void *v)

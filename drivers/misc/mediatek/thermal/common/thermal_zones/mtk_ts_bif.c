@@ -72,7 +72,7 @@ static kgid_t gid = KGIDT_INIT(1000);
 
 static unsigned int interval = 1;	/* seconds, 0 : no auto polling */
 static struct thermal_zone_device *thz_dev;
-static int mtkts_bif_debug_log;
+static int mtkts_bif_debug_log = 0;
 static int kernelmode;
 static int num_trip;
 static int trip_temp[10] = { 120000, 110000, 100000, 90000, 80000,

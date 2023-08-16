@@ -47,7 +47,7 @@ static kgid_t gid = KGIDT_INIT(1000);
 static DEFINE_SEMAPHORE(sem_mutex);
 static int isTimerCancelled;
 
-static int wmt_tm_debug_log;
+static int wmt_tm_debug_log = 0;
 #define wmt_tm_dprintk(fmt, args...)   \
 do { \
 	if (wmt_tm_debug_log) \

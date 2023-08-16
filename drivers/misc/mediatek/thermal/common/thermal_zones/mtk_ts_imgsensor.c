@@ -62,12 +62,12 @@ enum CAMERA_DUAL_CAMERA_SENSOR_ENUM senDevId, MUINT8 *valid, MUINT32 *temp)
 #define mtk_imgs_dprintk(fmt, args...)   \
 	do {                                    \
 		if (mtk_imgs_debug_log) {                \
-			pr_notice("[Thermal/TZ/IMGS]" fmt, ##args);\
+			pr_debug("[Thermal/TZ/IMGS]" fmt, ##args);\
 		}                                   \
 	} while (0)
 
 #define mtk_imgs_printk(fmt, args...)   \
-	pr_notice("[Thermal/TZ/IMGS]" fmt, ##args)
+	pr_debug("[Thermal/TZ/IMGS]" fmt, ##args)
 /*=============================================================
  * Function prototype
  *=============================================================
@@ -96,7 +96,7 @@ struct thz_data {
 static struct thz_data g_tsData[RESERVED_TZS];
 
 /* 0: disable debug logs, Not 0: enable debug logs */
-static int mtk_imgs_debug_log;
+static int mtk_imgs_debug_log = 0;
 
 struct cooler_data {
 	struct thermal_cooling_device *cl_dev;
@@ -798,12 +798,12 @@ struct thermal_cooling_device *cdev, unsigned long state)
 	g_clData[index].sysrst_state = state;
 
 	if (g_clData[index].sysrst_state == 1) {
-		pr_debug("%s: reset, reset, reset!!!\n",
+		pr_notice("%s: reset, reset, reset!!!\n",
 						g_clData[index].cl_name);
 
-		pr_debug("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
-		pr_debug("*****************************************\n");
-		pr_debug("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+		pr_notice("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+		pr_notice("*****************************************\n");
+		pr_notice("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
 
 		/* To trigger data abort to reset the system
 		 * for thermal protection.

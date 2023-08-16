@@ -72,7 +72,7 @@ static struct thermal_zone_device *thz_dev;
 static unsigned int cl_dev_sysrst_state;
 static struct thermal_cooling_device *cl_dev_sysrst;
 
-static int mtktscharger2_debug_log;
+static int mtktscharger2_debug_log = 0;
 
 /* This is to preserve last temperature readings from charger driver.
  * In case mtk_ts_charger.c fails to read temperature.

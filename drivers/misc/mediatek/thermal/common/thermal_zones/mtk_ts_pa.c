@@ -58,7 +58,7 @@ static int g_THERMAL_TRIP[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 static int cl_dev_sysrst_state;
 static struct thermal_zone_device *thz_dev;
 static struct thermal_cooling_device *cl_dev_sysrst;
-static int mtktspa_debug_log;
+static int mtktspa_debug_log = 0;
 static int kernelmode;
 
 static int num_trip = 1;
@@ -428,10 +428,10 @@ struct thermal_cooling_device *cdev, unsigned long state)
 
 	cl_dev_sysrst_state = state;
 	if (cl_dev_sysrst_state == 1) {
-		pr_debug("Power/PA_Thermal: reset, reset, reset!!!");
-		pr_debug("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-		pr_debug("*****************************************");
-		pr_debug("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+		pr_notice("Power/PA_Thermal: reset, reset, reset!!!");
+		pr_notice("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+		pr_notice("*****************************************");
+		pr_notice("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
 
 		/* To trigger data abort to reset the system
 		 * for thermal protection.
