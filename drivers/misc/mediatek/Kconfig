@@ -370,6 +370,7 @@ config MTK_SKB_OWNER
 
 config MTK_CORE_CTL
 	bool "MTK Core Control with CPU Isolation"
+	depends on MTK_CPU_CTRL
 	help
 	  This config is for the core control policy with CPU isolation.
 	  The core control online and offline CPU cores based on task
@@ -378,6 +379,7 @@ config MTK_CORE_CTL
 	  please set n.
 
 source "drivers/misc/mediatek/task_turbo/Kconfig"
+source "drivers/misc/mediatek/usb_boost/Kconfig"
 endmenu # PPT
 
 menu "Memory configs"
