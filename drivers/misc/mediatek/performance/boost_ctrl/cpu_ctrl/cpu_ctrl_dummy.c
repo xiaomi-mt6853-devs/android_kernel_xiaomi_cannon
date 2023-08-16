@@ -17,9 +17,9 @@ int update_userlimit_cpu_freq(int kicker, int num_cluster
 }
 EXPORT_SYMBOL(update_userlimit_cpu_freq);
 
-int update_isolation_cpu(int kicker, int enable, int cpu)
+void update_isolation_cpu(int kicker, int enable, int cpu)
 {
-	return 0;
+	return;
 }
 EXPORT_SYMBOL(update_isolation_cpu);
 
