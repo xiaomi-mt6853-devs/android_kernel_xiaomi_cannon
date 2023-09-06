@@ -55,6 +55,10 @@
 #include <linux/double_click.h>
 #include "focaltech_core.h"
 
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+#include <linux/input/tp_common.h>
+#endif
+
 /*****************************************************************************
 * Private constant and macro definitions using #define
 *****************************************************************************/
@@ -767,6 +771,35 @@ static int fts_irq_registration(struct fts_ts_data *ts_data)
 	return ret;
 }
 
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+static ssize_t double_tap_show(struct kobject *kobj,
+                               struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", fts_data->db_wakeup);
+}
+
+static ssize_t double_tap_store(struct kobject *kobj,
+                                struct kobj_attribute *attr, const char *buf,
+                                size_t count)
+{
+	int rc, val;
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc)
+	return -EINVAL;
+
+	fts_data->db_wakeup = !!val;
+	if (!fts_data->suspended)
+		tp_enable_doubleclick(!!fts_data->db_wakeup);
+	return count;
+}
+
+static struct tp_common_ops double_tap_ops = {
+	.show = double_tap_show,
+	.store = double_tap_store,
+};
+#endif
+
 static void fts_switch_mode_work(struct work_struct *work)
 {
 	struct fts_mode_switch *sw =
@@ -824,6 +857,9 @@ static int fts_input_init(struct fts_ts_data *ts_data)
 	int key_num = 0;
 	struct fts_ts_platform_data *pdata = ts_data->pdata;
 	struct input_dev *input_dev;
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+	int i;
+#endif
 
 	FTS_FUNC_ENTER();
 	input_dev = input_allocate_device();
@@ -852,6 +888,14 @@ static int fts_input_init(struct fts_ts_data *ts_data)
 		for (key_num = 0; key_num < pdata->key_number; key_num++)
 			input_set_capability(input_dev, EV_KEY, pdata->keys[key_num]);
 	}
+
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+	i = tp_common_set_double_tap_ops(&double_tap_ops);
+	if (i < 0) {
+		FTS_ERROR("%s: Failed to create double_tap node err=%d\n",
+		          __func__, ret);
+	}
+#endif
 
 #if FTS_MT_PROTOCOL_B_EN
 	input_mt_init_slots(input_dev, pdata->max_touch_number, INPUT_MT_DIRECT);
