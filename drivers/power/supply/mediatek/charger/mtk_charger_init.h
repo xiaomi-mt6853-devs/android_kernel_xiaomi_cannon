@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -20,7 +19,7 @@
 #define BATTERY_CV_MIN 4330000
 
 #define BATTERY_CV 4350000
-#define V_CHARGER_MAX 10500000  /* 10.5 V */
+#define V_CHARGER_MAX 10500000 /* 10.5 V */
 #define V_CHARGER_MIN 4600000 /* 4.6 V */
 
 #define USB_CHARGER_CURRENT_SUSPEND		0 /* def CONFIG_USB_IF */
@@ -34,6 +33,7 @@
 #define APPLE_1_0A_CHARGER_CURRENT		650000
 #define APPLE_2_1A_CHARGER_CURRENT		800000
 #define TA_AC_CHARGING_CURRENT	3000000
+#define USB_UNLIMITED_CURRENT	2000000
 #define PD_CHARGER_CURRENT		3000000
 
 /* dynamic mivr */
@@ -123,6 +123,10 @@
 
 #define VSYS_WATT 5000000
 #define IBUS_ERR 14
+
+#define SC_BATTERY_SIZE 3000
+#define SC_CV_TIME 3600
+#define SC_CURRENT_LIMIT 2000
 
 #define SET_CAP_DELAY 0
 

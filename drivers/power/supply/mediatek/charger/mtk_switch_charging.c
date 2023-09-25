@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -148,8 +147,13 @@ static void swchg_select_charging_current_limit(struct charger_manager *info)
 	}
 
 	if (info->usb_unlimited) {
-		pdata->input_current_limit =
-					info->data.ac_charger_input_current;
+		if (pdata->input_current_limit_by_aicl != -1) {
+			pdata->input_current_limit =
+				pdata->input_current_limit_by_aicl;
+		} else {
+			pdata->input_current_limit =
+				info->data.usb_unlimited_current;
+		}
 		pdata->charging_current_limit =
 			info->data.ac_charger_current;
 		goto done;

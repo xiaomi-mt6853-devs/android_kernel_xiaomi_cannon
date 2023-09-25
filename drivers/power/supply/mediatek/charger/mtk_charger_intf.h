@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -34,12 +33,14 @@
 #include <mt-plat/charger_class.h>
 
 struct charger_manager;
+struct charger_data;
 #include "mtk_pe_intf.h"
 #include "mtk_pe20_intf.h"
 #include "mtk_pe40_intf.h"
 #include "mtk_pe50_intf.h"
 #include "mtk_pdc_intf.h"
 #include "adapter_class.h"
+#include "mtk_smartcharging.h"
 
 #define CHARGING_INTERVAL 10
 #define CHARGING_FULL_INTERVAL 20
@@ -204,6 +205,7 @@ struct charger_custom_data {
 	int charging_host_charger_current;
 	int apple_1_0a_charger_current;
 	int apple_2_1a_charger_current;
+	int usb_unlimited_current;
 	int ta_ac_charger_current;
 	int pd_charger_current;
 
@@ -453,6 +455,8 @@ struct charger_manager {
 	/* dynamic mivr */
 	bool enable_dynamic_mivr;
 
+	struct smartcharging sc;
+
 	/* input suspend*/
 	bool is_input_suspend;
 
@@ -467,6 +471,11 @@ struct charger_manager {
 
 	/*check connector thermal */
 	struct delayed_work	conn_therm_work;
+
+	/*daemon related*/
+	struct sock *daemo_nl_sk;
+	u_int g_scd_pid;
+	struct scd_cmd_param_t_1 sc_data;
 
 	/* float retry */
 	struct delayed_work	float_retry_work;
@@ -487,6 +496,10 @@ struct charger_manager {
 
 	/*cycle count cv*/
 	struct range_data	cycle_count_cv_cfg[MAX_STEP_CHG_ENTRIES];
+
+	bool force_disable_pp[TOTAL_CHARGER];
+	bool enable_pp[TOTAL_CHARGER];
+	struct mutex pp_lock[TOTAL_CHARGER];
 };
 
 struct chg_type_info {
@@ -546,7 +559,6 @@ extern bool is_dual_charger_supported(struct charger_manager *info);
 extern int charger_enable_vbus_ovp(struct charger_manager *pinfo, bool enable);
 extern bool is_typec_adapter(struct charger_manager *info);
 extern int charger_manager_get_quick_charge_type(void);
-
 
 /* pmic API */
 extern unsigned int upmu_get_rgs_chrdet(void);

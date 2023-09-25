@@ -53,8 +53,8 @@
 #include <linux/proc_fs.h>
 #include <linux/of_fdt.h>	/*of_dt API*/
 #include <linux/of.h>
-#include <linux/vmalloc.h>
 #include <linux/of_platform.h> /*of_find_node_by_name*/
+#include <linux/vmalloc.h>
 #include <linux/math64.h>
 #include <linux/alarmtimer.h>
 
@@ -84,6 +84,7 @@
 #endif
 
 #include <linux/iio/consumer.h>
+
 
 /* ============================================================ */
 /* global variable */
@@ -346,6 +347,25 @@ int gauge_get_nag_dltv(void)
 }
 
 /* ============================================================ */
+/* battery health methods */
+/* ============================================================ */
+int mtk_get_bat_health(void)
+{
+	if (gm.bat_health != 0)
+		return gm.bat_health;
+
+	return 10000;
+}
+
+int mtk_get_bat_show_ag(void)
+{
+	if (gm.show_ag != 0)
+		return gm.show_ag;
+
+	return 10000;
+}
+
+/* ============================================================ */
 /* zcv filter methods */
 /* ============================================================ */
 void zcv_filter_init(struct zcv_filter *zf)
@@ -585,7 +605,7 @@ void fgauge_get_profile_id(void)
 	int id_volt = 0;
 	int id = 0;
 	int ret = 0;
-	int auxadc_voltage = 0;
+	int auxadc_voltage;
 	struct device_node *batterty_node;
 	struct platform_device *battery_dev;
 
@@ -614,13 +634,13 @@ void fgauge_get_profile_id(void)
 
 
 	if (ret <= 0) {
-		bm_err("[%s] iio_read_channel_processed failed\n", __func__);
-		return;
+		bm_err("[%s] IIO channel read failed %d \n", __func__, ret);
+	} else {
+		bm_err("[%s] auxadc_voltage is %d\n", __func__, auxadc_voltage);
+		id_volt = auxadc_voltage * 1500 / 4096;
+		id_volt = id_volt * 1000;
+		bm_err("[%s] battery_id_voltage is %d\n", __func__, id_volt);
 	}
-
-	bm_err("[%s]auxadc_voltage is %d\n", __func__, auxadc_voltage);
-	id_volt = id_volt * 1000;
-	bm_err("[%s]battery_id_voltage is %d\n", __func__, id_volt);
 
 	if ((sizeof(g_battery_id_voltage) /
 		sizeof(int)) != TOTAL_BATTERY_NUMBER) {
@@ -878,6 +898,17 @@ void fg_custom_init_from_header(void)
 	fg_cust_data.ui_full_limit_soc4 = UI_FULL_LIMIT_SOC4;
 	fg_cust_data.ui_full_limit_ith4 = UI_FULL_LIMIT_ITH4;
 	fg_cust_data.ui_full_limit_time = UI_FULL_LIMIT_TIME;
+
+	fg_cust_data.ui_full_limit_fc_soc0 = UI_FULL_LIMIT_FC_SOC0;
+	fg_cust_data.ui_full_limit_fc_ith0 = UI_FULL_LIMIT_FC_ITH0;
+	fg_cust_data.ui_full_limit_fc_soc1 = UI_FULL_LIMIT_FC_SOC1;
+	fg_cust_data.ui_full_limit_fc_ith1 = UI_FULL_LIMIT_FC_ITH1;
+	fg_cust_data.ui_full_limit_fc_soc2 = UI_FULL_LIMIT_FC_SOC2;
+	fg_cust_data.ui_full_limit_fc_ith2 = UI_FULL_LIMIT_FC_ITH2;
+	fg_cust_data.ui_full_limit_fc_soc3 = UI_FULL_LIMIT_FC_SOC3;
+	fg_cust_data.ui_full_limit_fc_ith3 = UI_FULL_LIMIT_FC_ITH3;
+	fg_cust_data.ui_full_limit_fc_soc4 = UI_FULL_LIMIT_FC_SOC4;
+	fg_cust_data.ui_full_limit_fc_ith4 = UI_FULL_LIMIT_FC_ITH4;
 
 	/* voltage limit for uisoc 1% */
 	fg_cust_data.ui_low_limit_en = UI_LOW_LIMIT_EN;
@@ -1172,11 +1203,77 @@ static void fg_custom_parse_table(const struct device_node *np,
 	}
 }
 
+/* struct FUELGAUGE_TEMPERATURE Fg_Temperature_Table[21]; */
+static void fg_custom_part_ntc_table(const struct device_node *np,
+		struct FUELGAUGE_TEMPERATURE *profile_struct)
+{
+	struct FUELGAUGE_TEMPERATURE *p_fg_temp_table;
+	int bat_temp = 0, temperature_r = 0;
+	int saddles = 0, idx = 0, ret = 0, ret_a = 0;
+#if 0
+	int i;
+#endif
+	p_fg_temp_table = profile_struct;
+
+#if 0 /* dump */
+	bm_err("[before]Fg_Temperature_Table - bat_temp : temperature_r\n");
+	for (i = 0; i < 21; i++) {
+		bm_err("%d : %d %d\n", i, Fg_Temperature_Table[i].BatteryTemp,
+			Fg_Temperature_Table[i].TemperatureR);
+	}
+#endif
+
+	ret = fg_read_dts_val(np, "RBAT_TYPE", &(gm.rbat.type), 1);
+	ret_a = fg_read_dts_val(np, "RBAT_PULL_UP_R",
+			&(gm.rbat.rbat_pull_up_r), 1);
+	if ((ret == -1) || (ret_a == -1)) {
+		bm_err("Fail to get ntc type from dts.Keep default value\t");
+		bm_err("RBAT_TYPE=%d, RBAT_PULL_UP_R=%d\n",
+			gm.rbat.type, gm.rbat.rbat_pull_up_r);
+		return;
+	}
+	bm_err("From DTS. RBAT_TYPE = %d, RBAT_PULL_UP_R=%d\n",
+		gm.rbat.type, gm.rbat.rbat_pull_up_r);
+
+	fg_read_dts_val(np, "rbat_temperature_table_num", &saddles, 1);
+	bm_err("%s : rbat_temperature_table_num(%d)\n", __func__, saddles);
+
+	idx = 0;
+
+	while (1) {
+		if (idx >= (saddles * 2))
+			break;
+		ret = of_property_read_u32_index(np, "rbat_battery_temperature",
+							idx, &bat_temp);
+
+		idx++;
+		if (!of_property_read_u32_index(
+			np, "rbat_battery_temperature", idx, &temperature_r))
+			bm_debug("bat_temp = %d, temperature_r=%d\n",
+					bat_temp, temperature_r);
+
+		p_fg_temp_table->BatteryTemp = bat_temp;
+		p_fg_temp_table->TemperatureR = temperature_r;
+
+		idx++;
+		p_fg_temp_table++;
+	}
+
+#if 0 /* dump */
+	bm_err("[after]Fg_Temperature_Table - bat_temp : temperature_r\n");
+	for (i = 0; i < saddles; i++) {
+		bm_err("%d : %d %d\n", i, Fg_Temperature_Table[i].BatteryTemp,
+			Fg_Temperature_Table[i].TemperatureR);
+	}
+#endif
+}
+
 void fg_custom_init_from_dts(struct platform_device *dev)
 {
 	struct device_node *np = dev->dev.of_node;
 	unsigned int val;
 	int bat_id, multi_battery, active_table, i, j, ret, column;
+	int r_pseudo100_raw = 0, r_pseudo100_col = 0;
 	char node_name[128];
 
 	fgauge_get_profile_id();
@@ -1226,6 +1323,8 @@ void fg_custom_init_from_dts(struct platform_device *dev)
 		&(fg_cust_data.com_r_fg_value), UNIT_TRANS_10);
 	if (ret == -1)
 		fg_cust_data.com_r_fg_value = fg_cust_data.r_fg_value;
+
+	fg_custom_part_ntc_table(np, Fg_Temperature_Table);
 
 	fg_read_dts_val(np, "FULL_TRACKING_BAT_INT2_MULTIPLY",
 		&(fg_cust_data.full_tracking_bat_int2_multiply), 1);
@@ -1463,6 +1562,28 @@ void fg_custom_init_from_dts(struct platform_device *dev)
 	fg_read_dts_val(np, "UI_FULL_LIMIT_TIME",
 		&(fg_cust_data.ui_full_limit_time), 1);
 
+
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_SOC0",
+		&(fg_cust_data.ui_full_limit_fc_soc0), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_ITH0",
+		&(fg_cust_data.ui_full_limit_fc_ith0), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_SOC1",
+		&(fg_cust_data.ui_full_limit_fc_soc1), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_ITH1",
+		&(fg_cust_data.ui_full_limit_fc_ith1), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_SOC2",
+		&(fg_cust_data.ui_full_limit_fc_soc2), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_ITH2",
+		&(fg_cust_data.ui_full_limit_fc_ith2), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_SOC3",
+		&(fg_cust_data.ui_full_limit_fc_soc3), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_ITH3",
+		&(fg_cust_data.ui_full_limit_fc_ith3), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_SOC4",
+		&(fg_cust_data.ui_full_limit_fc_soc4), 1);
+	fg_read_dts_val(np, "UI_FULL_LIMIT_FC_ITH4",
+		&(fg_cust_data.ui_full_limit_fc_ith4), 1);
+
 	/* voltage limit for uisoc 1% */
 	fg_read_dts_val(np, "UI_LOW_LIMIT_EN", &(fg_cust_data.ui_low_limit_en),
 		1);
@@ -1494,6 +1615,36 @@ void fg_custom_init_from_dts(struct platform_device *dev)
 		&(fg_cust_data.moving_battemp_en), 1);
 	fg_read_dts_val(np, "MOVING_BATTEMP_THR",
 		&(fg_cust_data.moving_battemp_thr), 1);
+
+	/* battery health */
+	fg_read_dts_val(np, "AGING_DIFF_MAX_THRESHOLD",
+		&(fg_cust_data.aging_diff_max_threshold), 1);
+	fg_read_dts_val(np, "AGING_DIFF_MAX_LEVEL",
+		&(fg_cust_data.aging_diff_max_level), 1);
+	fg_read_dts_val(np, "AGING_FACTOR_T_MIN",
+		&(fg_cust_data.aging_factor_t_min), 1);
+	fg_read_dts_val(np, "CYCLE_DIFF",
+		&(fg_cust_data.cycle_diff), 1);
+	fg_read_dts_val(np, "AGING_COUNT_MIN",
+		&(fg_cust_data.aging_count_min), 1);
+	fg_read_dts_val(np, "DEFAULT_SCORE",
+		&(fg_cust_data.default_score), 1);
+	fg_read_dts_val(np, "DEFAULT_SCORE_QUANTITY",
+		&(fg_cust_data.default_score_quantity), 1);
+	fg_read_dts_val(np, "FAST_CYCLE_SET",
+		&(fg_cust_data.fast_cycle_set), 1);
+	fg_read_dts_val(np, "LEVEL_MAX_CHANGE_BAT",
+		&(fg_cust_data.level_max_change_bat), 1);
+	fg_read_dts_val(np, "DIFF_MAX_CHANGE_BAT",
+		&(fg_cust_data.diff_max_change_bat), 1);
+	fg_read_dts_val(np, "AGING_TRACKING_START",
+		&(fg_cust_data.aging_tracking_start), 1);
+	fg_read_dts_val(np, "MAX_AGING_DATA",
+		&(fg_cust_data.max_aging_data), 1);
+	fg_read_dts_val(np, "MAX_FAST_DATA",
+		&(fg_cust_data.max_fast_data), 1);
+	fg_read_dts_val(np, "FAST_DATA_THRESHOLD_SCORE",
+		&(fg_cust_data.fast_data_threshold_score), 1);
 
 	fg_read_dts_val(np, "DISABLE_MTKBATTERY",
 		(int *)&(gm.disable_mtkbattery), 1);
@@ -1648,6 +1799,53 @@ void fg_custom_init_from_dts(struct platform_device *dev)
 		fg_read_dts_val(np, "TEMPERATURE_T4",
 			&(fg_table_cust_data.fg_profile[4].temperature), 1);
 	}
+
+	fg_read_dts_val(np, "g_FG_charge_PSEUDO100_row",
+		&(r_pseudo100_raw), 1);
+	fg_read_dts_val(np, "g_FG_charge_PSEUDO100_col",
+		&(r_pseudo100_col), 1);
+
+	/* init for pseudo100 */
+	for (i = 0; i < MAX_TABLE; i++) {
+		for (j = 0; j < MAX_CHARGE_RDC; j++)
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[j]
+				= fg_table_cust_data.fg_profile[i].pseudo100;
+	}
+
+	for (i = 0; i < MAX_TABLE; i++) {
+		bm_err("%6d %6d %6d %6d %6d\n",
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[0],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[1],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[2],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[3],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[4]
+			);
+	}
+	/* read dtsi from pseudo100 */
+	for (i = 0; i < MAX_TABLE; i++) {
+		for (j = 0; j < r_pseudo100_raw; j++) {
+			fg_read_dts_val_by_idx(np, "g_FG_charge_PSEUDO100",
+				i*r_pseudo100_raw+j,
+				&(fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[j+1]),
+					UNIT_TRANS_100);
+		}
+	}
+
+
+	bm_err("g_FG_charge_PSEUDO100_row:%d g_FG_charge_PSEUDO100_col:%d\n",
+		r_pseudo100_raw, r_pseudo100_col);
+
+	for (i = 0; i < MAX_TABLE; i++) {
+		bm_err("%6d %6d %6d %6d %6d\n",
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[0],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[1],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[2],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[3],
+			fg_table_cust_data.fg_profile[i].r_pseudo100.pseudo[4]
+			);
+	}
+
+	/* END of pseudo100 */
 
 	for (i = 0; i < fg_table_cust_data.active_table_number; i++) {
 		sprintf(node_name, "battery%d_profile_t%d_num", bat_id, i);
@@ -3387,6 +3585,13 @@ void bmd_ctrl_cmd_from_user(void *nl_data, struct fgd_nl_msg_t *ret_msg)
 				ret_msg->fgd_data_len);
 		}
 		break;
+	case FG_DAEMON_CMD_GET_BH_DATA:
+		{
+			ret_msg->fgd_data_len += sizeof(struct ag_center_data_st);
+			memcpy(ret_msg->fgd_data,
+				&gm.bh_data, sizeof(struct ag_center_data_st));
+		}
+		break;
 
 	case FG_DAEMON_CMD_GET_PTIM_VBAT:
 		{
@@ -4414,6 +4619,36 @@ void bmd_ctrl_cmd_from_user(void *nl_data, struct fgd_nl_msg_t *ret_msg)
 		bm_debug(
 			"[fr] FG_DAEMON_CMD_GET_RTC_INVALID = %d\n",
 			rtc_invalid);
+	}
+	break;
+
+	case FG_DAEMON_CMD_SET_BATTERY_CAPACITY:
+	{
+		struct fgd_cmd_param_t_8 param;
+
+		memcpy(&param, &msg->fgd_data[0],
+			sizeof(struct fgd_cmd_param_t_8));
+
+		if (param.data[10] != 0 && param.data[11] != 0) {
+			gm.show_ag = param.data[10];
+			gm.bat_health = param.data[11];
+			bm_err("%s:SET_BATTERY_CAPACITY: show_ag:%d, bat_health:%d",
+				__func__, gm.show_ag, gm.bat_health);
+		}
+
+		bm_debug(
+			"[fr] FG_DAEMON_CMD_SET_BATTERY_CAPACITY = %d %d %d %d %d %d %d %d %d %d RM:%d\n",
+			param.data[0],
+			param.data[1],
+			param.data[2],
+			param.data[3],
+			param.data[4],
+			param.data[5],
+			param.data[6],
+			param.data[7],
+			param.data[8],
+			param.data[9],
+			param.data[4] * param.data[6] / 10000);
 	}
 	break;
 

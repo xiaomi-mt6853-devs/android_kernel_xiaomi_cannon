@@ -1,7 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
  * Copyright (C) 2021 XiaoMi, Inc.
-
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -306,6 +305,11 @@ struct fgd_cmd_param_t_7 {
 	int status;
 };
 
+struct fgd_cmd_param_t_8 {
+	int size;
+	int data[512];
+};
+
 enum daemon_cmd_int_data {
 	FG_GET_NORETURN = 0,
 	FG_GET_SHUTDOWN_CAR = 1,
@@ -504,6 +508,17 @@ struct fuel_gauge_custom_data {
 	int ui_full_limit_ith4;
 	int ui_full_limit_time;
 
+	int ui_full_limit_fc_soc0;
+	int ui_full_limit_fc_ith0;
+	int ui_full_limit_fc_soc1;
+	int ui_full_limit_fc_ith1;
+	int ui_full_limit_fc_soc2;
+	int ui_full_limit_fc_ith2;
+	int ui_full_limit_fc_soc3;
+	int ui_full_limit_fc_ith3;
+	int ui_full_limit_fc_soc4;
+	int ui_full_limit_fc_ith4;
+
 	/* using voltage to limit uisoc in 1% case */
 	int ui_low_limit_en;
 	int ui_low_limit_soc0;
@@ -554,6 +569,22 @@ struct fuel_gauge_custom_data {
 	int power_on_car_nochr;
 	int shutdown_car_ratio;
 
+	/* battery health */
+	int aging_diff_max_threshold;
+	int aging_diff_max_level;
+	int aging_factor_t_min;
+	int cycle_diff;
+	int aging_count_min;
+	int default_score;
+	int default_score_quantity;
+	int fast_cycle_set;
+	int level_max_change_bat;
+	int diff_max_change_bat;
+	int aging_tracking_start;
+	int max_aging_data;
+	int max_fast_data;
+	int fast_data_threshold_score;
+
 	/* log_level */
 	int daemon_log_level;
 	int record_log;
@@ -577,6 +608,10 @@ struct FUELGAUGE_CHARGER_STRUCT {
 	int rdc[MAX_CHARGE_RDC];
 };
 
+struct FUELGAUGE_CHARGE_PSEUDO100_S {
+	int pseudo[MAX_CHARGE_RDC];
+};
+
 struct FUELGAUGE_PROFILE_STRUCT {
 	unsigned int mah;
 	unsigned short voltage;
@@ -597,6 +632,7 @@ struct fuel_gauge_table {
 	int shutdown_hl_zcv;
 
 	int size;
+	struct FUELGAUGE_CHARGE_PSEUDO100_S r_pseudo100;
 	struct FUELGAUGE_PROFILE_STRUCT fg_profile[100];
 };
 
@@ -731,6 +767,10 @@ struct zcv_filter {
 };
 
 
+struct ag_center_data_st {
+	int data[43];
+	struct timespec times[3];
+};
 struct mtk_battery {
 
 	int fix_coverity;
@@ -772,6 +812,9 @@ struct mtk_battery {
 /* log */
 	int log_level;
 	int d_log_level;
+
+/* battery health */
+	struct ag_center_data_st bh_data;
 
 /* for test */
 	struct BAT_EC_Struct Bat_EC_ctrl;
@@ -858,6 +901,8 @@ struct mtk_battery {
 	bool is_reset_aging_factor;
 	int aging_factor;
 
+	int bat_health;
+	int show_ag;
 	int soc_decimal_rate;
 
 	struct timespec uisoc_oldtime;
@@ -954,6 +999,8 @@ extern void bmd_ctrl_cmd_from_user(void *nl_data, struct fgd_nl_msg_t *ret_msg);
 extern int interpolation(int i1, int b1, int i2, int b2, int i);
 extern struct mtk_battery *get_mtk_battery(void);
 extern void battery_update_psd(struct battery_data *bat_data);
+extern int wakeup_fg_algo(unsigned int flow_state);
+extern int wakeup_fg_algo_cmd(unsigned int flow_state, int cmd, int para1);
 extern int wakeup_fg_algo_atomic(unsigned int flow_state);
 extern unsigned int TempToBattVolt(int temp, int update);
 extern int fg_get_battery_temperature_for_zcv(void);
@@ -1036,12 +1083,13 @@ extern int gauge_enable_interrupt(int intr_number, int en);
 int en_intr_VBATON_UNDET(int en);
 int reg_VBATON_UNDET(void (*callback)(void));
 
+/*Get batt resistance */
+extern int battery_get_bat_resistance_id(void);
+
 /* zcvf */
 int zcv_filter_add(struct zcv_filter *zf);
 void zcv_filter_dump(struct zcv_filter *zf);
 bool zcv_check(struct zcv_filter *zf);
 void zcv_filter_init(struct zcv_filter *zf);
 
-/*Get batt resistance */
-extern int battery_get_bat_resistance_id(void);
 #endif /* __MTK_BATTERY_INTF_H__ */

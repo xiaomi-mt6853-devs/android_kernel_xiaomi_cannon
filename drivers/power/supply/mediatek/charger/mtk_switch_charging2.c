@@ -154,7 +154,7 @@ static void swchg_select_charging_current_limit(struct charger_manager *info)
 		pdata->input_current_limit =
 					info->data.ac_charger_input_current;
 		pdata->charging_current_limit =
-			info->data.ac_charger_current;
+					info->data.ac_charger_current;
 		goto done;
 	}
 
@@ -260,12 +260,6 @@ static void swchg_select_charging_current_limit(struct charger_manager *info)
 		if (IS_ENABLED(CONFIG_USBIF_COMPLIANCE)
 		    && info->chr_type == STANDARD_HOST)
 			chr_err("USBIF & STAND_HOST skip current check\n");
-		else {
-			if (info->sw_jeita.sm == TEMP_T0_TO_T1) {
-				pdata->input_current_limit = 500000;
-				pdata->charging_current_limit = 350000;
-			}
-		}
 	}
 
 	if (pdata->thermal_input_current_limit != -1) {
@@ -301,6 +295,9 @@ done:
 		_uA_to_mA(info->pe4.input_current_limit),
 		_uA_to_mA(pdata->input_current_limit),
 		_uA_to_mA(pdata->charging_current_limit),
+		_uA_to_mA(info->sc.pre_ibat),
+		_uA_to_mA(info->sc.sc_ibat),
+		info->sc.solution,
 		info->chr_type, info->usb_unlimited,
 		IS_ENABLED(CONFIG_USBIF_COMPLIANCE), info->usb_state,
 		pdata->input_current_limit_by_aicl, info->atm_enabled);
@@ -616,6 +613,9 @@ static int select_pe40_charging_current_limit(struct charger_manager *info)
 		_uA_to_mA(pdata->thermal_charging_current_limit),
 		_uA_to_mA(pdata->input_current_limit),
 		_uA_to_mA(pdata->charging_current_limit),
+		info->sc.pre_ibat,
+		info->sc.sc_ibat,
+		info->sc.solution,
 		info->chr_type, info->usb_unlimited,
 		IS_ENABLED(CONFIG_USBIF_COMPLIANCE), info->usb_state,
 		pdata->input_current_limit_by_aicl, info->atm_enabled);
@@ -712,6 +712,11 @@ static int select_pdc_charging_current_limit(struct charger_manager *info)
 
 	pdata = &info->chg1_data;
 
+	pdata->input_current_limit =
+		info->data.pd_charger_current;
+	pdata->charging_current_limit =
+		info->data.pd_charger_current;
+
 	if (info->chr_type == STANDARD_CHARGER) {
 		pdata->input_current_limit =
 			info->data.pd_charger_current;
@@ -746,6 +751,9 @@ static int select_pdc_charging_current_limit(struct charger_manager *info)
 		_uA_to_mA(pdata->thermal_charging_current_limit),
 		_uA_to_mA(pdata->input_current_limit),
 		_uA_to_mA(pdata->charging_current_limit),
+		info->sc.pre_ibat,
+		info->sc.sc_ibat,
+		info->sc.solution,
 		info->chr_type, info->usb_unlimited,
 		IS_ENABLED(CONFIG_USBIF_COMPLIANCE), info->usb_state,
 		pdata->input_current_limit_by_aicl, info->atm_enabled);
@@ -847,9 +855,7 @@ static int mtk_switch_chr_cc(struct charger_manager *info)
 
 	chr_err("pe40_ready:%d pps:%d hv:%d thermal:%d,%d tmp:%d,%d,%d\n",
 		info->enable_pe_4,
-		pdc_is_ready(),
 		pe40_is_ready(),
-		info->leave_pdc,
 		info->enable_hv_charging,
 		info->chg1_data.thermal_charging_current_limit,
 		info->chg1_data.thermal_input_current_limit,
