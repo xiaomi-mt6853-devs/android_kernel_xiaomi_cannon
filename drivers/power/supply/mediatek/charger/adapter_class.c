@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -172,22 +171,25 @@ struct adapter_device *adapter_device_register(const char *name,
 	static struct lock_class_key key;
 	struct srcu_notifier_head *head = NULL;
 	int rc;
+	char *adapter_name = NULL;
 
 	pr_notice("%s: name=%s\n", __func__, name);
 	adapter_dev = kzalloc(sizeof(*adapter_dev), GFP_KERNEL);
 	if (!adapter_dev)
 		return ERR_PTR(-ENOMEM);
 
-	mutex_init(&adapter_dev->ops_lock);
-	adapter_dev->dev.class = adapter_class;
-	adapter_dev->dev.parent = parent;
-	adapter_dev->dev.release = adapter_device_release;
-	dev_set_name(&adapter_dev->dev, name);
-	dev_set_drvdata(&adapter_dev->dev, devdata);
 	head = &adapter_dev->evt_nh;
 	srcu_init_notifier_head(head);
 	/* Rename srcu's lock to avoid LockProve warning */
 	lockdep_init_map(&(&head->srcu)->dep_map, name, &key, 0);
+	mutex_init(&adapter_dev->ops_lock);
+	adapter_dev->dev.class = adapter_class;
+	adapter_dev->dev.parent = parent;
+	adapter_dev->dev.release = adapter_device_release;
+	adapter_name = kasprintf(GFP_KERNEL, "%s", name);
+	dev_set_name(&adapter_dev->dev, adapter_name);
+	dev_set_drvdata(&adapter_dev->dev, devdata);
+	kfree(adapter_name);
 
 	/* Copy properties */
 	if (props) {

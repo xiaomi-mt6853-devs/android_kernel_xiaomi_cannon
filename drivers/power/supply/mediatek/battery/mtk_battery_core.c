@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -53,7 +52,6 @@
 #include <linux/proc_fs.h>
 #include <linux/of_fdt.h>	/*of_dt API*/
 #include <linux/of.h>
-#include <linux/of_platform.h> /*of_find_node_by_name*/
 #include <linux/vmalloc.h>
 #include <linux/math64.h>
 #include <linux/alarmtimer.h>
@@ -83,7 +81,6 @@
 #include "simulator_kernel.h"
 #endif
 
-#include <linux/iio/consumer.h>
 
 
 /* ============================================================ */
@@ -598,14 +595,14 @@ bool __attribute__ ((weak)) mt_usb_is_device(void)
 /* ============================================================ */
 /* custom setting */
 /* ============================================================ */
-struct iio_channel *channel;
 #ifdef MTK_GET_BATTERY_ID_BY_AUXADC
 void fgauge_get_profile_id(void)
 {
 	int id_volt = 0;
 	int id = 0;
 	int ret = 0;
-	int auxadc_voltage;
+	int auxadc_voltage = 0;
+	struct iio_channel *channel;
 	struct device_node *batterty_node;
 	struct platform_device *battery_dev;
 
@@ -634,13 +631,13 @@ void fgauge_get_profile_id(void)
 
 
 	if (ret <= 0) {
-		bm_err("[%s] IIO channel read failed %d \n", __func__, ret);
-	} else {
-		bm_err("[%s] auxadc_voltage is %d\n", __func__, auxadc_voltage);
-		id_volt = auxadc_voltage * 1500 / 4096;
-		id_volt = id_volt * 1000;
-		bm_err("[%s] battery_id_voltage is %d\n", __func__, id_volt);
+		bm_err("[%s] iio_read_channel_processed failed\n", __func__);
+		return;
 	}
+
+	bm_err("[%s]auxadc_voltage is %d\n", __func__, auxadc_voltage);
+	id_volt = auxadc_voltage * 1500 / 4096;
+	bm_err("[%s]battery_id_voltage is %d\n", __func__, id_volt);
 
 	if ((sizeof(g_battery_id_voltage) /
 		sizeof(int)) != TOTAL_BATTERY_NUMBER) {
@@ -662,23 +659,6 @@ void fgauge_get_profile_id(void)
 		__func__,
 		gm.battery_id);
 }
-
-int battery_get_bat_resistance_id(void)
-{
-	int auxadc_voltage;
-	int id_volt;
-
-	if (channel) {
-		iio_read_channel_processed(channel, &auxadc_voltage);
-	} else {
-		bm_err("[%s] no channel to processed \n", __func__);
-	}
-
-	id_volt = auxadc_voltage * 1500 / 4096;
-
-	return id_volt;
-}
-
 #elif defined(MTK_GET_BATTERY_ID_BY_GPIO)
 void fgauge_get_profile_id(void)
 {
