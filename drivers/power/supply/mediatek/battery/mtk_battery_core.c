@@ -81,6 +81,10 @@
 #include "simulator_kernel.h"
 #endif
 
+#ifdef MTK_GET_BATTERY_ID_BY_AUXADC
+#include <linux/of_platform.h>
+#include <linux/iio/consumer.h>
+#endif
 
 
 /* ============================================================ */
