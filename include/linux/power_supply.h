@@ -159,12 +159,15 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_USB_HC,
 	POWER_SUPPLY_PROP_USB_OTG,
 	POWER_SUPPLY_PROP_CHARGE_ENABLED,
+	POWER_SUPPLY_PROP_RESISTANCE,
+	POWER_SUPPLY_PROP_RESISTANCE_ID, /* in Ohms */
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT,
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
+	POWER_SUPPLY_PROP_BATTERY_TYPE,
 };
 
 enum power_supply_type {
@@ -173,6 +176,7 @@ enum power_supply_type {
 	POWER_SUPPLY_TYPE_UPS,
 	POWER_SUPPLY_TYPE_MAINS,
 	POWER_SUPPLY_TYPE_USB,			/* Standard Downstream Port */
+	POWER_SUPPLY_TYPE_USB_FLOAT,    	/* Floating charger */
 	POWER_SUPPLY_TYPE_USB_DCP,		/* Dedicated Charging Port */
 	POWER_SUPPLY_TYPE_USB_CDP,		/* Charging Downstream Port */
 	POWER_SUPPLY_TYPE_USB_ACA,		/* Accessory Charger Adapters */
@@ -180,7 +184,13 @@ enum power_supply_type {
 	POWER_SUPPLY_TYPE_USB_PD,		/* Power Delivery Port */
 	POWER_SUPPLY_TYPE_USB_PD_DRP,		/* PD Dual Role Port */
 	POWER_SUPPLY_TYPE_APPLE_BRICK_ID,	/* Apple Charging Method */
+	POWER_SUPPLY_TYPE_USB_HVDCP,		/* High Voltage DCP */
+	POWER_SUPPLY_TYPE_USB_HVDCP_3,		/* Efficient High Voltage DCP */
+	POWER_SUPPLY_TYPE_USB_HVDCP_3_PLUS,	/* Efficient High Voltage DCP */
 	POWER_SUPPLY_TYPE_WIRELESS,		/* Wireless Charger */
+	POWER_SUPPLY_TYPE_BMS,			/* Battery Monitor System */
+	POWER_SUPPLY_TYPE_CHARGER_IDENTIFY,	/* Charger type identify System */
+	POWER_SUPPLY_TYPE_PARALLEL,		/* Parallel Path */
 };
 
 enum power_supply_notifier_events {

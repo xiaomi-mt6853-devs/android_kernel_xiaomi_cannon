@@ -599,6 +599,7 @@ bool __attribute__ ((weak)) mt_usb_is_device(void)
 /* ============================================================ */
 /* custom setting */
 /* ============================================================ */
+struct iio_channel *channel;
 #ifdef MTK_GET_BATTERY_ID_BY_AUXADC
 void fgauge_get_profile_id(void)
 {
@@ -606,7 +607,6 @@ void fgauge_get_profile_id(void)
 	int id = 0;
 	int ret = 0;
 	int auxadc_voltage = 0;
-	struct iio_channel *channel;
 	struct device_node *batterty_node;
 	struct platform_device *battery_dev;
 
@@ -663,6 +663,23 @@ void fgauge_get_profile_id(void)
 		__func__,
 		gm.battery_id);
 }
+
+int battery_get_bat_resistance_id(void)
+{
+	int auxadc_voltage;
+	int id_volt;
+
+	if (channel) {
+		iio_read_channel_processed(channel, &auxadc_voltage);
+	} else {
+		bm_err("[%s] no channel to processed \n", __func__);
+	}
+
+	id_volt = auxadc_voltage * 1500 / 4096;
+
+	return id_volt;
+}
+
 #elif defined(MTK_GET_BATTERY_ID_BY_GPIO)
 void fgauge_get_profile_id(void)
 {

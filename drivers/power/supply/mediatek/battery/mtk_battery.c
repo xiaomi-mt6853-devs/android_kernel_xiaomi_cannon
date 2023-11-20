@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -414,6 +415,82 @@ int check_cap_level(int uisoc)
 		return POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
 }
 
+static int bms_get_property(struct power_supply *psy,
+		enum power_supply_property psp, union power_supply_propval *val)
+{
+	int fgcurrent = 0;
+	bool b_ischarging = 0;
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = 1;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		b_ischarging = gauge_get_current(&fgcurrent);
+		if (b_ischarging == false)
+			fgcurrent = 0 - fgcurrent;
+
+		val->intval = fgcurrent * 100;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
+		val->intval = battery_get_bat_voltage();
+		break;
+	case POWER_SUPPLY_PROP_TEMP:
+		val->intval = battery_get_bat_temperature();
+		val->intval = val->intval * 10;
+		break;
+	case POWER_SUPPLY_PROP_RESISTANCE_ID:
+		val->intval = battery_get_bat_resistance_id();
+		break;
+	case POWER_SUPPLY_PROP_BATTERY_TYPE:
+		pr_info("gm.battery_id :%d.\n", gm.battery_id);
+		if (gm.battery_id == 0)
+			val->strval = "J22 battery_profile";
+		else
+			val->strval = "UNKNOWN battery_profile";
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
+		val->intval = gm.algo_qmax * gm.aging_factor / 100;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		val->intval = 5000000;
+		break;
+	case POWER_SUPPLY_PROP_RESISTANCE:
+		val->intval = 140000;
+		break;
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		val->intval = gm.bat_cycle;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static enum power_supply_property bms_properties[] = {
+	POWER_SUPPLY_PROP_ONLINE,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_VOLTAGE_OCV,
+	POWER_SUPPLY_PROP_TEMP,
+	POWER_SUPPLY_PROP_RESISTANCE_ID,
+	POWER_SUPPLY_PROP_BATTERY_TYPE,
+	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_RESISTANCE,
+	POWER_SUPPLY_PROP_CYCLE_COUNT,
+};
+
+struct bms_data bms_main = {
+	.psd = {
+		.name = "bms",
+		.type = POWER_SUPPLY_TYPE_BMS,
+		.properties = bms_properties,
+		.num_properties = ARRAY_SIZE(bms_properties),
+		.get_property = bms_get_property,
+	},
+};
+
 void battery_update_psd(struct battery_data *bat_data)
 {
 	bat_data->BAT_batt_vol = battery_get_bat_voltage();
@@ -458,15 +535,13 @@ static int battery_get_property(struct power_supply *psy,
 		if (b_ischarging == false)
 			fgcurrent = 0 - fgcurrent;
 
-		val->intval = fgcurrent * 100;
+		val->intval = -fgcurrent * 100;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_AVG:
 		val->intval = battery_get_bat_avg_current() * 100;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		val->intval =
-			fg_table_cust_data.fg_profile[gm.battery_id].q_max
-			* 1000;
+		val->intval = gm.algo_qmax * gm.aging_factor / 100;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
 		val->intval = gm.ui_soc *
@@ -509,25 +584,7 @@ static int battery_get_property(struct power_supply *psy,
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		if (check_cap_level(data->BAT_CAPACITY) ==
-			POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN)
-			val->intval = 0;
-		else {
-			int q_max_mah = 0;
-			int q_max_uah = 0;
-
-			q_max_mah =
-				fg_table_cust_data.fg_profile[
-				gm.battery_id].q_max / 10;
-
-			q_max_uah = q_max_mah * 1000;
-			if (q_max_uah <= 100000) {
-				bm_debug("%s q_max_mah:%d q_max_uah:%d\n",
-					__func__, q_max_mah, q_max_uah);
-				q_max_uah = 100001;
-			}
-			val->intval = q_max_uah;
-		}
+		val->intval = 5000000;
 		break;
 
 
@@ -552,7 +609,7 @@ struct battery_data battery_main = {
 	.BAT_STATUS = POWER_SUPPLY_STATUS_DISCHARGING,
 	.BAT_HEALTH = POWER_SUPPLY_HEALTH_GOOD,
 	.BAT_PRESENT = 1,
-	.BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LION,
+	.BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LIPO,
 	.BAT_CAPACITY = -1,
 	.BAT_batt_vol = 0,
 	.BAT_batt_temp = 0,
@@ -563,7 +620,7 @@ void evb_battery_init(void)
 	battery_main.BAT_STATUS = POWER_SUPPLY_STATUS_FULL;
 	battery_main.BAT_HEALTH = POWER_SUPPLY_HEALTH_GOOD;
 	battery_main.BAT_PRESENT = 1;
-	battery_main.BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LION;
+	battery_main.BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LIPO;
 	battery_main.BAT_CAPACITY = 100;
 	battery_main.BAT_batt_vol = 4200;
 	battery_main.BAT_batt_temp = 22;
@@ -621,7 +678,7 @@ void battery_update(struct battery_data *bat_data)
 	struct power_supply *bat_psy = bat_data->psy;
 
 	battery_update_psd(&battery_main);
-	bat_data->BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LION;
+	bat_data->BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LIPO;
 	bat_data->BAT_HEALTH = POWER_SUPPLY_HEALTH_GOOD;
 	bat_data->BAT_PRESENT = 1;
 
@@ -4401,6 +4458,17 @@ static int __init battery_probe(struct platform_device *dev)
 	}
 	bm_err("[BAT_probe] power_supply_register Battery Success !!\n");
 #endif
+
+	bms_main.psy =
+		power_supply_register(
+			&(dev->dev), &bms_main.psd, NULL);
+	if (IS_ERR(bms_main.psy)) {
+		bm_err("[BAT_probe] power_supply_register BMS Fail !!\n");
+		ret = PTR_ERR(bms_main.psy);
+		return ret;
+	}
+	bm_err("[BAT_probe] power_supply_register BMS Success !!\n");
+
 	ret = device_create_file(&(dev->dev), &dev_attr_Battery_Temperature);
 	ret = device_create_file(&(dev->dev), &dev_attr_UI_SOC);
 

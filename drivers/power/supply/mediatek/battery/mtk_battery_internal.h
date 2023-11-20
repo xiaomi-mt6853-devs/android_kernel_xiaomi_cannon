@@ -52,7 +52,7 @@
 #define SHUTDOWN_TIME 40
 #define AVGVBAT_ARRAY_SIZE 30
 #define INIT_VOLTAGE 3450
-#define BATTERY_SHUTDOWN_TEMPERATURE 60
+#define BATTERY_SHUTDOWN_TEMPERATURE 70
 
 /* ============================================================ */
 /* typedef and Struct*/
@@ -669,6 +669,12 @@ struct battery_data {
 	int BAT_batt_temp;
 };
 
+struct bms_data {
+	struct power_supply_desc psd;
+	struct power_supply *psy;
+	struct power_supply_config cfg;
+};
+
 struct BAT_EC_Struct {
 	int fixed_temp_en;
 	int fixed_temp_value;
@@ -1072,6 +1078,9 @@ extern int gauge_enable_interrupt(int intr_number, int en);
 /* GM25 Plug out API */
 int en_intr_VBATON_UNDET(int en);
 int reg_VBATON_UNDET(void (*callback)(void));
+
+/* Get batt resistance */
+extern int battery_get_bat_resistance_id(void);
 
 /* zcvf */
 int zcv_filter_add(struct zcv_filter *zf);

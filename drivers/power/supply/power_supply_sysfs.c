@@ -41,9 +41,11 @@
 static struct device_attribute power_supply_attrs[];
 
 static const char * const power_supply_type_text[] = {
-	"Unknown", "Battery", "UPS", "Mains", "USB",
-	"USB_DCP", "USB_CDP", "USB_ACA", "Wireless", "USB_C",
-	"USB_PD", "USB_PD_DRP", "BrickID"
+	"Unknown", "Battery", "UPS", "Mains", "USB","USB_FLOAT",
+	"USB_DCP", "USB_CDP", "USB_ACA", "USB_C",
+	"USB_PD", "USB_PD_DRP", "BrickID",
+	"USB_HVDCP", "USB_HVDCP_3", "USB_HVDCP_3P5", "Wireless",
+	"Bms", "Charger_Identify", "Parallel",
 };
 
 static const char * const power_supply_status_text[] = {
@@ -255,12 +257,15 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(usb_hc),
 	POWER_SUPPLY_ATTR(usb_otg),
 	POWER_SUPPLY_ATTR(charge_enabled),
+	POWER_SUPPLY_ATTR(resistance),
+	POWER_SUPPLY_ATTR(resistance_id),
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_ATTR(charge_counter_ext),
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(manufacturer),
 	POWER_SUPPLY_ATTR(serial_number),
+	POWER_SUPPLY_ATTR(battery_type),
 };
 
 static struct attribute *
