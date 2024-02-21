@@ -142,6 +142,7 @@ struct charger_ops {
 
 	/* charger type detection */
 	int (*enable_chg_type_det)(struct charger_device *dev, bool en);
+	int (*rerun_apsd)(struct charger_device *dev, bool en);
 
 	/* run AICL */
 	int (*run_aicl)(struct charger_device *dev, u32 *uA);
@@ -361,5 +362,7 @@ extern int unregister_charger_device_notifier(
 extern int charger_dev_notify(
 	struct charger_device *charger_dev, int event);
 
+extern int charger_dev_rerun_apsd(
+	struct charger_device *charger_dev, bool en);
 
 #endif /*LINUX_POWER_CHARGER_CLASS_H*/

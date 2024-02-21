@@ -168,6 +168,8 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 	POWER_SUPPLY_PROP_BATTERY_TYPE,
+	/* Xiaomi edits */
+	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
 };
 
 enum power_supply_type {

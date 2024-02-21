@@ -425,11 +425,18 @@ struct charger_manager {
 
 	struct smartcharging sc;
 
+	struct power_supply	*usb_psy;
+
+	/* check init boot */
+	struct delayed_work	check_init_boot;
 
 	/*daemon related*/
 	struct sock *daemo_nl_sk;
 	u_int g_scd_pid;
 	struct scd_cmd_param_t_1 sc_data;
+
+	/* float retry */
+	struct delayed_work	float_retry_work;
 
 	bool force_disable_pp[TOTAL_CHARGER];
 	bool enable_pp[TOTAL_CHARGER];

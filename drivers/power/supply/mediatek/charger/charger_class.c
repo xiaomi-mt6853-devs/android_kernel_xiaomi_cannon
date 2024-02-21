@@ -22,6 +22,16 @@
 
 static struct class *charger_class;
 
+int charger_dev_rerun_apsd(struct charger_device *chg_dev, bool en)
+{
+	if (chg_dev != NULL && chg_dev->ops != NULL &&
+	    chg_dev->ops->rerun_apsd)
+		return chg_dev->ops->rerun_apsd(chg_dev, en);
+
+	return -ENOTSUPP;
+}
+EXPORT_SYMBOL(charger_dev_rerun_apsd);
+
 static ssize_t charger_show_name(struct device *dev,
 				    struct device_attribute *attr, char *buf)
 {

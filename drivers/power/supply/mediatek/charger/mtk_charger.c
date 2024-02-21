@@ -78,6 +78,7 @@ static struct charger_manager *pinfo;
 static struct list_head consumer_head = LIST_HEAD_INIT(consumer_head);
 static DEFINE_MUTEX(consumer_mutex);
 
+static bool first_boot_flag;
 
 bool mtk_is_TA_support_pd_pps(struct charger_manager *pinfo)
 {
@@ -1348,6 +1349,16 @@ void mtk_charger_int_handler(void)
 	_wake_up_charger(pinfo);
 }
 
+static void mtk_check_init_boot_work(struct work_struct *work)
+{
+	struct charger_manager *info = container_of(work,
+			struct charger_manager, check_init_boot.work);
+
+	first_boot_flag = true;
+	if (info->usb_psy)
+		power_supply_changed(info->usb_psy);
+}
+
 static int mtk_charger_plug_in(struct charger_manager *info,
 				enum charger_type chr_type)
 {
@@ -1362,6 +1373,10 @@ static int mtk_charger_plug_in(struct charger_manager *info,
 	chr_err("mtk_is_charger_on plug in, type:%d\n", chr_type);
 	if (info->plug_in != NULL)
 		info->plug_in(info);
+
+	if (!first_boot_flag)
+		schedule_delayed_work(&info->check_init_boot,
+				msecs_to_jiffies(18000));
 
 	memset(&pinfo->sc.data, 0, sizeof(struct scd_cmd_param_t_1));
 	pinfo->sc.disable_in_this_plug = false;
@@ -1397,9 +1412,39 @@ static int mtk_charger_plug_out(struct charger_manager *info)
 	return 0;
 }
 
+#define FLOAT_RETRY_DELAY_5S 5000
+static void mtk_float_retry_work(struct work_struct *work)
+{
+	struct charger_manager *info = container_of(work,
+			struct charger_manager, float_retry_work.work);
+	int ret;
+
+	ret = charger_dev_rerun_apsd(info->chg1_dev, false);
+	if (ret < 0)
+		chr_err("%s: en chgdet fail\n", __func__);
+
+	pr_info("%s rerun bc12 check for float.\n", __func__);
+}
+
+bool reboot_first_flag = true;
 static bool mtk_is_charger_on(struct charger_manager *info)
 {
 	enum charger_type chr_type;
+	bool charger_online = false;
+
+	if (!charger_online)
+		chr_type = CHARGER_UNKNOWN;
+
+	chr_info("%s: online=%d, type=%d, info->type=%d.\n",
+			__func__, charger_online, chr_type, info->chr_type);
+
+	if (!reboot_first_flag && charger_online
+			&& (chr_type == NONSTANDARD_CHARGER)
+			&& (info->chr_type != NONSTANDARD_CHARGER)) {
+		chr_err("Float: will retry bc12.\n");
+		schedule_delayed_work(&info->float_retry_work,
+				msecs_to_jiffies(FLOAT_RETRY_DELAY_5S));
+	}
 
 	chr_type = mt_get_charger_type();
 	if (chr_type == CHARGER_UNKNOWN) {
@@ -1408,6 +1453,15 @@ static bool mtk_is_charger_on(struct charger_manager *info)
 			mutex_lock(&info->cable_out_lock);
 			info->cable_out_cnt = 0;
 			mutex_unlock(&info->cable_out_lock);
+		}
+		if (reboot_first_flag && charger_online) {
+			charger_manager_notifier(info,
+					CHARGER_NOTIFY_NORMAL);
+			if (pinfo->usb_psy)
+				power_supply_changed(pinfo->usb_psy);
+			else
+				chr_err("%s: usb psy err.\n", __func__);
+			chr_err("%s: check plugin early.\n", __func__);
 		}
 	} else {
 		if (info->chr_type == CHARGER_UNKNOWN)
@@ -3989,6 +4043,9 @@ static int mtk_charger_probe(struct platform_device *pdev)
 		charger_manager_force_disable_power_path(
 			info->chg1_consumer, MAIN_CHARGER, true);
 
+	INIT_DELAYED_WORK(&info->check_init_boot, mtk_check_init_boot_work);
+	INIT_DELAYED_WORK(&info->float_retry_work, mtk_float_retry_work);
+
 	info->init_done = true;
 	_wake_up_charger(info);
 
@@ -4016,6 +4073,8 @@ static void mtk_charger_shutdown(struct platform_device *dev)
 			mtk_pe_reset_ta_vchr(info);
 		pr_debug("%s: reset TA before shutdown\n", __func__);
 	}
+	cancel_delayed_work_sync(&info->check_init_boot);
+	cancel_delayed_work_sync(&info->float_retry_work);
 }
 
 static const struct of_device_id mtk_charger_of_match[] = {

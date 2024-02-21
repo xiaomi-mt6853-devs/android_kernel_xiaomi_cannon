@@ -218,6 +218,7 @@ static void usb_extcon_detect_cable(struct work_struct *work)
 }
 #endif
 
+extern bool reboot_first_flag;
 static int mt_charger_set_property(struct power_supply *psy,
 	enum power_supply_property psp, const union power_supply_propval *val)
 {
@@ -258,6 +259,10 @@ static int mt_charger_set_property(struct power_supply *psy,
 	}
 
 	dump_charger_name(mtk_chg->chg_type);
+
+	if (mtk_chg->chg_type != CHARGER_UNKNOWN) {
+		reboot_first_flag = false;
+	}
 
 	if (!cti->ignore_usb) {
 		/* usb */
@@ -322,7 +327,10 @@ static int mt_usb_get_property(struct power_supply *psy,
 		if ((mtk_chg->chg_type == STANDARD_HOST) ||
 			(mtk_chg->chg_type == CHARGING_HOST))
 			val->intval = 1;
-		else
+		else if (reboot_first_flag && mt_charger_plugin() &&
+				(mtk_chg->chg_type == CHARGER_UNKNOWN)) {
+			val->intval = 1;
+		} else
 			val->intval = 0;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
@@ -398,25 +406,25 @@ static int pd_tcp_notifier_call(struct notifier_block *pnb,
 		    (noti->typec_state.new_state == TYPEC_ATTACHED_SNK ||
 		    noti->typec_state.new_state == TYPEC_ATTACHED_CUSTOM_SRC ||
 		    noti->typec_state.new_state == TYPEC_ATTACHED_NORP_SRC)) {
-			pr_info("%s USB Plug in, pol = %d\n", __func__,
+				pr_info("%s USB Plug in, pol = %d\n", __func__,
 					noti->typec_state.polarity);
-			plug_in_out_handler(cti, true, false);
+				plug_in_out_handler(cti, true, false);
 		} else if ((noti->typec_state.old_state == TYPEC_ATTACHED_SNK ||
 		    noti->typec_state.old_state == TYPEC_ATTACHED_CUSTOM_SRC ||
 		    noti->typec_state.old_state == TYPEC_ATTACHED_NORP_SRC ||
 		    noti->typec_state.old_state == TYPEC_ATTACHED_AUDIO)
 			&& noti->typec_state.new_state == TYPEC_UNATTACHED) {
-			if (cti->tcpc_kpoc) {
-				vbus = battery_get_vbus();
-				pr_info("%s KPOC Plug out, vbus = %d\n",
-					__func__, vbus);
-				queue_work_on(cpumask_first(cpu_online_mask),
-					      cti->pwr_off_wq,
-					      &cti->pwr_off_work);
-				break;
-			}
-			pr_info("%s USB Plug out\n", __func__);
-			plug_in_out_handler(cti, false, false);
+				if (cti->tcpc_kpoc) {
+					vbus = battery_get_vbus();
+					pr_info("%s KPOC Plug out, vbus = %d\n",
+						__func__, vbus);
+					queue_work_on(cpumask_first(cpu_online_mask),
+					      	cti->pwr_off_wq,
+					      	&cti->pwr_off_work);
+					break;
+				}
+				pr_info("%s USB Plug out\n", __func__);
+				plug_in_out_handler(cti, false, false);
 		} else if (noti->typec_state.old_state == TYPEC_ATTACHED_SRC &&
 			noti->typec_state.new_state == TYPEC_ATTACHED_SNK) {
 			pr_info("%s Source_to_Sink\n", __func__);
