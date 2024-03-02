@@ -111,12 +111,12 @@
 /**
  * Maximum size in bytes of a MMU lock region, as a logarithm
  */
-#define KBASE_LOCK_REGION_MAX_SIZE_LOG2 (64)
+#define KBASE_LOCK_REGION_MAX_SIZE_LOG2 (48) /*  256 TB */
 
 /**
  * Minimum size in bytes of a MMU lock region, as a logarithm
  */
-#define KBASE_LOCK_REGION_MIN_SIZE_LOG2 (15)
+#define KBASE_LOCK_REGION_MIN_SIZE_LOG2 (15) /* 32 kB */
 
 /**
  * Maximum number of GPU memory region zones
@@ -267,21 +267,6 @@ struct kbase_mmu_table {
 	phys_addr_t pgd;
 	u8 group_id;
 	struct kbase_context *kctx;
-};
-
-/**
- * struct kbase_reg_zone - Information about GPU memory region zones
- * @base_pfn: Page Frame Number in GPU virtual address space for the start of
- *            the Zone
- * @va_size_pages: Size of the Zone in pages
- *
- * Track information about a zone KBASE_REG_ZONE() and related macros.
- * In future, this could also store the &rb_root that are currently in
- * &kbase_context and &kbase_csf_device.
- */
-struct kbase_reg_zone {
-	u64 base_pfn;
-	u64 va_size_pages;
 };
 
 #if MALI_USE_CSF
@@ -568,21 +553,6 @@ struct kbase_mmu_mode {
 struct kbase_mmu_mode const *kbase_mmu_mode_get_aarch64(void);
 
 #define DEVNAME_SIZE	16
-
-#if defined(MTK_GPU_BM_2)
-struct job_status_qos {
-        phys_addr_t phyaddr;
-        size_t size;
-};
-
-struct v1_data {
-        unsigned int version;
-        unsigned int ctx;
-        unsigned int frame;
-        unsigned int job;
-        unsigned int freq;
-};
-#endif
 
 /**
  * enum kbase_devfreq_work_type - The type of work to perform in the devfreq
@@ -1200,14 +1170,6 @@ struct kbase_device {
 	struct priority_control_manager_device *pcm_dev;
 
 	struct notifier_block oom_notifier_block;
-#if IS_ENABLED(CONFIG_MTK_IOMMU_V2)
-	struct ion_client *client;
-#endif
-
-#if defined(MTK_GPU_BM_2)
-	struct job_status_qos job_status_addr;
-	struct v1_data* v1;
-#endif
 };
 
 /**
@@ -1431,6 +1393,21 @@ struct kbase_sub_alloc {
 	struct list_head link;
 	struct page *page;
 	DECLARE_BITMAP(sub_pages, SZ_2M / SZ_4K);
+};
+
+/**
+ * struct kbase_reg_zone - Information about GPU memory region zones
+ * @base_pfn: Page Frame Number in GPU virtual address space for the start of
+ *            the Zone
+ * @va_size_pages: Size of the Zone in pages
+ *
+ * Track information about a zone KBASE_REG_ZONE() and related macros.
+ * In future, this could also store the &rb_root that are currently in
+ * &kbase_context
+ */
+struct kbase_reg_zone {
+	u64 base_pfn;
+	u64 va_size_pages;
 };
 
 /**

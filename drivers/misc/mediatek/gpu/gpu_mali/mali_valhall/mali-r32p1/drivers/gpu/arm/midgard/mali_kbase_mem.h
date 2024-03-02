@@ -38,13 +38,6 @@
 /* Required for kbase_mem_evictable_unmake */
 #include "mali_kbase_mem_linux.h"
 
-#if IS_ENABLED(CONFIG_MTK_IOMMU_V2)
-#include <mtk/ion_drv.h>
-#include <mtk/mtk_ion.h>
-#include <ion.h>
-#include <mach/mt_iommu.h>
-#endif
-
 static inline void kbase_process_page_usage_inc(struct kbase_context *kctx,
 		int pages);
 
@@ -160,10 +153,6 @@ struct kbase_mem_phy_alloc {
 			unsigned int current_mapping_usage_count;
 			struct sg_table *sgt;
 			bool need_sync;
-#if IS_ENABLED(CONFIG_MTK_IOMMU_V2)
-			struct ion_client *ion_client;
-			struct ion_handle *ion_handle;
-#endif
 		} umm;
 		struct {
 			u64 stride;
@@ -517,21 +506,6 @@ struct kbase_va_region {
 	int    va_refcnt;
 };
 
-/**
- * kbase_is_ctx_reg_zone - determine whether a KBASE_REG_ZONE_<...> is for a
- *                         context or for a device
- * @zone_bits: A KBASE_REG_ZONE_<...> to query
- *
- * Return: True if the zone for @zone_bits is a context zone, False otherwise
- */
-static inline bool kbase_is_ctx_reg_zone(unsigned long zone_bits)
-{
-	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
-	return (zone_bits == KBASE_REG_ZONE_SAME_VA ||
-		zone_bits == KBASE_REG_ZONE_CUSTOM_VA ||
-		zone_bits == KBASE_REG_ZONE_EXEC_VA);
-}
-
 /* Special marker for failed JIT allocations that still must be marked as
  * in-use
  */
@@ -555,14 +529,12 @@ static inline bool kbase_is_region_invalid_or_free(struct kbase_va_region *reg)
 	return (kbase_is_region_invalid(reg) ||	kbase_is_region_free(reg));
 }
 
-void kbase_remove_va_region(struct kbase_device *kbdev,
-			    struct kbase_va_region *reg);
-static inline void kbase_region_refcnt_free(struct kbase_device *kbdev,
-					    struct kbase_va_region *reg)
+int kbase_remove_va_region(struct kbase_va_region *reg);
+static inline void kbase_region_refcnt_free(struct kbase_va_region *reg)
 {
 	/* If region was mapped then remove va region*/
 	if (reg->start_pfn)
-		kbase_remove_va_region(kbdev, reg);
+		kbase_remove_va_region(reg);
 
 	/* To detect use-after-free in debug builds */
 	KBASE_DEBUG_CODE(reg->flags |= KBASE_REG_FREE);
@@ -597,7 +569,7 @@ static inline struct kbase_va_region *kbase_va_region_alloc_put(
 	dev_dbg(kctx->kbdev->dev, "va_refcnt %d after put %pK\n",
 		region->va_refcnt, (void *)region);
 	if (!region->va_refcnt)
-		kbase_region_refcnt_free(kctx->kbdev, region);
+		kbase_region_refcnt_free(region);
 
 	return NULL;
 }
@@ -2053,7 +2025,7 @@ int kbase_mem_copy_to_pinned_user_pages(struct page **dest_pages,
 		unsigned int *target_page_nr, size_t offset);
 
 /**
- * kbase_reg_zone_end_pfn - return the end Page Frame Number of @zone
+ * kbase_ctx_reg_zone_end_pfn - return the end Page Frame Number of @zone
  * @zone: zone to query
  *
  * Return: The end of the zone corresponding to @zone
@@ -2078,7 +2050,7 @@ static inline void kbase_ctx_reg_zone_init(struct kbase_context *kctx,
 	struct kbase_reg_zone *zone;
 
 	lockdep_assert_held(&kctx->reg_lock);
-	WARN_ON(!kbase_is_ctx_reg_zone(zone_bits));
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
 
 	zone = &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
 	*zone = (struct kbase_reg_zone){
@@ -2101,7 +2073,7 @@ static inline struct kbase_reg_zone *
 kbase_ctx_reg_zone_get_nolock(struct kbase_context *kctx,
 			      unsigned long zone_bits)
 {
-	WARN_ON(!kbase_is_ctx_reg_zone(zone_bits));
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
 
 	return &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
 }
@@ -2119,7 +2091,7 @@ static inline struct kbase_reg_zone *
 kbase_ctx_reg_zone_get(struct kbase_context *kctx, unsigned long zone_bits)
 {
 	lockdep_assert_held(&kctx->reg_lock);
-	WARN_ON(!kbase_is_ctx_reg_zone(zone_bits));
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
 
 	return &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
 }

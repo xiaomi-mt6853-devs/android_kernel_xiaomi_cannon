@@ -66,14 +66,8 @@ endif
 # Configurations
 #
 
-# *** MTK ***
-include $(src)/Kbuild-mtk-custom-env
-include $(src)/platform/mtk_platform_common/Kbuild
-ccflags-y += -I$(src)/include
-subdir-ccflags-y += -I$(src)/include
-
 # Driver version string which is returned to userspace via an ioctl
-MALI_RELEASE_NAME ?= '"r32p1-00bet4"'
+MALI_RELEASE_NAME ?= '"r32p1-01eac0"'
 # Set up defaults if not defined by build system
 ifeq ($(CONFIG_MALI_DEBUG), y)
     MALI_UNIT_TEST = 1
@@ -84,15 +78,10 @@ else
 endif
 MALI_COVERAGE ?= 0
 
-#CONFIG_MALI_PLATFORM_NAME ?= "devicetree"
-# *** MTK ***
-CONFIG_MALI_PLATFORM_NAME ?= $(CONFIG_MALI_PLATFORM_THIRDPARTY_NAME)
+CONFIG_MALI_PLATFORM_NAME ?= "devicetree"
+
 # Kconfig passes in the name with quotes for in-tree builds - remove them.
 MALI_PLATFORM_DIR := $(shell echo $(CONFIG_MALI_PLATFORM_NAME))
-ifeq ($(CONFIG_MTK_TRUSTED_MEMORY_SUBSYSTEM), y)
-    include $(srctree)/drivers/misc/mediatek/trusted_mem/Makefile.include
-    ccflags-y += -I$(srctree)/drivers/staging/android/ion
-endif
 
 ifeq ($(CONFIG_MALI_CSF_SUPPORT),y)
     MALI_JIT_PRESSURE_LIMIT_BASE = 0
@@ -119,7 +108,7 @@ MALI_INCREMENTAL_RENDERING ?= 0
 #
 # ccflags
 #
-ccflags-y += \
+ccflags-y = \
     -DMALI_CUSTOMER_RELEASE=$(MALI_CUSTOMER_RELEASE) \
     -DMALI_USE_CSF=$(MALI_USE_CSF) \
     -DMALI_KERNEL_TEST_API=$(MALI_KERNEL_TEST_API) \
@@ -181,7 +170,6 @@ mali_kbase-y := \
     mali_kbase_core_linux.o \
     mali_kbase_mem_profile_debugfs.o \
     mali_kbase_disjoint_events.o \
-    mali_kbase_gator_api.o \
     mali_kbase_debug_mem_view.o \
     mali_kbase_smc.o \
     mali_kbase_mem_pool.o \

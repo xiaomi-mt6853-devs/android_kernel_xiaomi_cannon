@@ -41,8 +41,6 @@
 #include <mali_kbase_dummy_job_wa.h>
 #include <backend/gpu/mali_kbase_clk_rate_trace_mgr.h>
 
-#include "../../platform/mtk_platform_common.h"
-
 /**
  * kbase_backend_late_init - Perform any backend-specific initialization.
  * @kbdev:	Device pointer
@@ -158,11 +156,6 @@ static void kbase_device_hwcnt_backend_jm_term(struct kbase_device *kbdev)
 }
 
 static const struct kbase_device_init dev_init[] = {
-	// *** MTK ***
-	{mtk_common_device_init, mtk_common_device_term,
-			"MTK common initialization failed"},
-	{mtk_platform_device_init, mtk_platform_device_term,
-			"MTK platform initialization failed"},
 	{ assign_irqs, NULL, "IRQ search failed" },
 	{ registers_map, registers_unmap, "Register map failed" },
 	{ kbase_device_io_history_init, kbase_device_io_history_term,

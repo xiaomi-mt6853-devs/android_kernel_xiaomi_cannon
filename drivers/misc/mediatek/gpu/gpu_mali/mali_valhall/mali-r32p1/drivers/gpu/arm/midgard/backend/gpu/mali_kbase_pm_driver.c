@@ -55,15 +55,6 @@
 
 #include <linux/of.h>
 
-#ifdef SHADER_PWR_CTL_WA
-#include <linux/delay.h>
-#include <platform/mtk_platform_common.h>
-#endif
-
-#if IS_ENABLED(CONFIG_MTK_GPU_DEBUG)
-#include <ged_log.h>
-#endif
-
 #ifdef CONFIG_MALI_CORESTACK
 bool corestack_driver_control = true;
 #else
@@ -306,14 +297,6 @@ static void kbase_pm_invoke(struct kbase_device *kbdev,
 	u32 lo = cores & 0xFFFFFFFF;
 	u32 hi = (cores >> 32) & 0xFFFFFFFF;
 
-#ifdef SHADER_PWR_CTL_WA
-	u64 shaders_trans = 0;
-	u64 shaders_ready = 0;
-	int clksrc = 0;
-	unsigned long flags;
-	int delay_count = 0;
-#endif
-
 	lockdep_assert_held(&kbdev->hwaccess_lock);
 
 	reg = core_type_to_reg(core_type, action);
@@ -364,22 +347,6 @@ static void kbase_pm_invoke(struct kbase_device *kbdev,
 			}
 	}
 
-#ifdef SHADER_PWR_CTL_WA
-	/*	enum g_clock_source_enum  {
-	 *	CLOCK_MAIN = 0,
-	 *	CLOCK_SUB,
-	 *	CLOCK_SUB2,
-	 *};
-	 */
-	if (core_type == KBASE_PM_CORE_SHADER &&
-		(action == ACTION_PWRON || action == ACTION_PWROFF)) {
-		//clksrc = 1;  /* CLOCK_SUB: 218.4MHz */
-		clksrc = 2;  /* CLOCK_SUB2: 26MHz */
-		mtk_set_mt_gpufreq_clock_parking_lock(&flags);
-		mtk_set_mt_gpufreq_clock_parking(clksrc);
-	}
-#endif
-
 	if (kbase_dummy_job_wa_enabled(kbdev) &&
 	    action == ACTION_PWRON &&
 	    core_type == KBASE_PM_CORE_SHADER &&
@@ -392,29 +359,6 @@ static void kbase_pm_invoke(struct kbase_device *kbdev,
 		if (hi != 0)
 			kbase_reg_write(kbdev, GPU_CONTROL_REG(reg + 4), hi);
 	}
-
-#ifdef SHADER_PWR_CTL_WA
-	if (core_type == KBASE_PM_CORE_SHADER &&
-		(action == ACTION_PWRON || action == ACTION_PWROFF)) {
-
-		/* Wait for shader transition done */
-		do {
-			udelay(10);
-			delay_count++;
-			dev_dbg(kbdev->dev, "delay_count: %d\n", delay_count);
-
-			shaders_trans = kbase_pm_get_trans_cores(kbdev, KBASE_PM_CORE_SHADER);
-			shaders_ready = kbase_pm_get_ready_cores(kbdev, KBASE_PM_CORE_SHADER);
-
-			shaders_trans &= ~shaders_ready;
-		} while (shaders_trans);
-
-		clksrc = 0;  /* CLOCK_MAIN: 1150MHz */
-		mtk_set_mt_gpufreq_clock_parking(clksrc);
-		mtk_set_mt_gpufreq_clock_parking_unlock(&flags);
-	}
-#endif
-
 }
 
 /**
@@ -2706,10 +2650,6 @@ static int kbase_pm_do_reset(struct kbase_device *kbdev)
 
 int kbase_pm_protected_mode_enable(struct kbase_device *const kbdev)
 {
-#if IS_ENABLED(CONFIG_MTK_GPU_DEBUG)
-	if (is_gpu_ged_log_enable())
-		pr_info("[gpu_debug]%s", __func__);
-#endif
 	kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 		GPU_COMMAND_SET_PROTECTED_MODE);
 	return 0;
@@ -2718,11 +2658,6 @@ int kbase_pm_protected_mode_enable(struct kbase_device *const kbdev)
 int kbase_pm_protected_mode_disable(struct kbase_device *const kbdev)
 {
 	lockdep_assert_held(&kbdev->pm.lock);
-
-#if IS_ENABLED(CONFIG_MTK_GPU_DEBUG)
-	if (is_gpu_ged_log_enable())
-		pr_info("[gpu_debug]%s", __func__);
-#endif
 
 	return kbase_pm_do_reset(kbdev);
 }

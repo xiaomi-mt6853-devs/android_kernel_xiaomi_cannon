@@ -39,8 +39,6 @@
 #include <mali_kbase_hwcnt_virtualizer.h>
 #include <mali_kbase_vinstr.h>
 
-#include "../../platform/mtk_platform_common.h"
-
 /**
  * kbase_device_firmware_hwcnt_term - Terminate CSF firmware and HWC
  *
@@ -239,11 +237,6 @@ static void kbase_device_hwcnt_backend_csf_term(struct kbase_device *kbdev)
 }
 
 static const struct kbase_device_init dev_init[] = {
-	// *** MTK ***
-	{mtk_common_device_init, mtk_common_device_term,
-			"MTK common initialization failed"},
-	{mtk_platform_device_init, mtk_platform_device_term,
-			"MTK platform initialization failed"},
 	{ assign_irqs, NULL, "IRQ search failed" },
 	{ registers_map, registers_unmap, "Register map failed" },
 	{ power_control_init, power_control_term,

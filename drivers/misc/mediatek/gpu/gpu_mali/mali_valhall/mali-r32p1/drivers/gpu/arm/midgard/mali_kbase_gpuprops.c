@@ -34,7 +34,6 @@
 #include <linux/of_platform.h>
 #include <linux/moduleparam.h>
 
-#include <mtk_gpufreq.h>
 
 static void kbase_gpuprops_construct_coherent_groups(
 	struct base_gpu_props * const props)
@@ -119,7 +118,6 @@ int kbase_gpuprops_get_curr_config_props(struct kbase_device *kbdev,
 {
 	struct kbase_current_config_regdump curr_config_regdump;
 	int err;
-	u64 force_shader_present = 0;
 
 	if (WARN_ON(!kbdev) || WARN_ON(!curr_config))
 		return -EINVAL;
@@ -144,18 +142,6 @@ int kbase_gpuprops_get_curr_config_props(struct kbase_device *kbdev,
 	curr_config->shader_present =
 		((u64) curr_config_regdump.shader_present_hi << 32) +
 		curr_config_regdump.shader_present_lo;
-
-	/* MTK Modify: Force to set current shader_present. */
-	force_shader_present = (u64)mt_gpufreq_get_shader_present();
-	if (force_shader_present != 0 &&
-		(force_shader_present != curr_config->shader_present) &&
-		(force_shader_present & curr_config->shader_present)) {
-		dev_info(kbdev->dev, "Force curr_config shader_present from 0x%llX to 0x%llX",
-			curr_config->shader_present,
-			force_shader_present & curr_config->shader_present);
-
-		curr_config->shader_present &= force_shader_present;
-	}
 
 	curr_config->num_cores = hweight64(curr_config->shader_present);
 
@@ -198,7 +184,6 @@ static int kbase_gpuprops_get_props(struct base_gpu_props * const gpu_props,
 	struct kbase_gpuprops_regdump regdump;
 	int i;
 	int err;
-	u64 force_shader_present = 0;
 
 	KBASE_DEBUG_ASSERT(kbdev != NULL);
 	KBASE_DEBUG_ASSERT(gpu_props != NULL);
@@ -220,20 +205,6 @@ static int kbase_gpuprops_get_props(struct base_gpu_props * const gpu_props,
 	gpu_props->raw_props.shader_present =
 		((u64) regdump.shader_present_hi << 32) +
 		regdump.shader_present_lo;
-
-	/* MTK Modify: Force to set current shader_present. */
-	force_shader_present = (u64)mt_gpufreq_get_shader_present();
-
-	if (force_shader_present != 0 &&
-		(force_shader_present != gpu_props->raw_props.shader_present) &&
-		(force_shader_present & gpu_props->raw_props.shader_present)) {
-		dev_info(kbdev->dev, "Force shader_present from 0x%llX to 0x%llX",
-		gpu_props->raw_props.shader_present,
-		force_shader_present & gpu_props->raw_props.shader_present);
-
-		gpu_props->raw_props.shader_present &= force_shader_present;
-	}
-
 	gpu_props->raw_props.tiler_present =
 		((u64) regdump.tiler_present_hi << 32) +
 		regdump.tiler_present_lo;

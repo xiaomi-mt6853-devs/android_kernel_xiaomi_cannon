@@ -32,6 +32,7 @@
 #include <mmu/mali_kbase_mmu.h>
 #include "mali_kbase_csf_timeout.h"
 #include <csf/ipa_control/mali_kbase_csf_ipa_control.h>
+#include <mali_kbase_hwaccess_time.h>
 
 #define CS_REQ_EXCEPTION_MASK (CS_REQ_FAULT_MASK | CS_REQ_FATAL_MASK)
 #define CS_ACK_EXCEPTION_MASK (CS_ACK_FAULT_MASK | CS_ACK_FATAL_MASK)
@@ -140,7 +141,7 @@ static void gpu_munmap_user_io_pages(struct kbase_context *kctx,
 	WARN_ON(reg->flags & KBASE_REG_FREE);
 
 	mutex_lock(&kctx->kbdev->csf.reg_lock);
-	kbase_remove_va_region(kctx->kbdev, reg);
+	kbase_remove_va_region(reg);
 	mutex_unlock(&kctx->kbdev->csf.reg_lock);
 }
 
@@ -218,7 +219,7 @@ bad_insert_output_page:
 				 reg->start_pfn, 1, MCU_AS_NR);
 bad_insert:
 	mutex_lock(&kbdev->csf.reg_lock);
-	kbase_remove_va_region(kbdev, reg);
+	kbase_remove_va_region(reg);
 	mutex_unlock(&kbdev->csf.reg_lock);
 
 	return ret;
@@ -1102,7 +1103,7 @@ static int create_normal_suspend_buffer(struct kbase_context *const kctx,
 
 mmu_insert_failed:
 	mutex_lock(&kctx->kbdev->csf.reg_lock);
-	kbase_remove_va_region(kctx->kbdev, reg);
+	WARN_ON(kbase_remove_va_region(reg));
 	mutex_unlock(&kctx->kbdev->csf.reg_lock);
 
 add_va_region_failed:
@@ -1183,7 +1184,7 @@ static int create_protected_suspend_buffer(struct kbase_device *const kbdev,
 
 mmu_insert_failed:
 	mutex_lock(&kbdev->csf.reg_lock);
-	kbase_remove_va_region(kbdev, reg);
+	WARN_ON(kbase_remove_va_region(reg));
 	mutex_unlock(&kbdev->csf.reg_lock);
 
 add_va_region_failed:
@@ -1403,7 +1404,7 @@ static void term_normal_suspend_buffer(struct kbase_context *const kctx,
 	WARN_ON(s_buf->reg->flags & KBASE_REG_FREE);
 
 	mutex_lock(&kctx->kbdev->csf.reg_lock);
-	kbase_remove_va_region(kctx->kbdev, s_buf->reg);
+	WARN_ON(kbase_remove_va_region(s_buf->reg));
 	mutex_unlock(&kctx->kbdev->csf.reg_lock);
 
 	kbase_mem_pool_free_pages(
@@ -1436,7 +1437,7 @@ static void term_protected_suspend_buffer(struct kbase_device *const kbdev,
 	WARN_ON(s_buf->reg->flags & KBASE_REG_FREE);
 
 	mutex_lock(&kbdev->csf.reg_lock);
-	kbase_remove_va_region(kbdev, s_buf->reg);
+	WARN_ON(kbase_remove_va_region(s_buf->reg));
 	mutex_unlock(&kbdev->csf.reg_lock);
 
 	kbase_csf_protected_memory_free(kbdev, s_buf->pma, nr_pages);
@@ -2757,9 +2758,14 @@ static void process_csg_interrupts(struct kbase_device *const kbdev,
 			 group->handle, csg_nr);
 
 		/* Check if the scheduling tick can be advanced */
-		if (kbase_csf_scheduler_all_csgs_idle(kbdev) &&
-		    !scheduler->gpu_idle_fw_timer_enabled) {
-			kbase_csf_scheduler_advance_tick_nolock(kbdev);
+		if (kbase_csf_scheduler_all_csgs_idle(kbdev)) {
+			if (!scheduler->gpu_idle_fw_timer_enabled)
+				kbase_csf_scheduler_advance_tick_nolock(kbdev);
+		} else if (atomic_read(&scheduler->non_idle_offslot_grps)) {
+			/* If there are non-idle CSGs waiting for a slot, fire
+			 * a tock for a replacement.
+			 */
+			mod_delayed_work(scheduler->wq, &scheduler->tock_work, 0);
 		}
 	}
 
@@ -2770,7 +2776,8 @@ static void process_csg_interrupts(struct kbase_device *const kbdev,
 		KBASE_KTRACE_ADD_CSF_GRP(kbdev, CSG_PROGRESS_TIMER_INTERRUPT,
 					 group, req ^ ack);
 		dev_info(kbdev->dev,
-			"Timeout notification received for group %u of ctx %d_%d on slot %d\n",
+			"[%llu] Iterator PROGRESS_TIMER timeout notification received for group %u of ctx %d_%d on slot %d\n",
+			kbase_backend_get_cycle_cnt(kbdev),
 			group->handle, group->kctx->tgid, group->kctx->id, csg_nr);
 
 		handle_progress_timer_event(group);
@@ -3066,4 +3073,3 @@ u8 kbase_csf_priority_check(struct kbase_device *kbdev, u8 req_priority)
 
 	return out_priority;
 }
-

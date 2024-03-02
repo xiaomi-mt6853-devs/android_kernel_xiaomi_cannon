@@ -47,7 +47,3 @@ endif
 mali_kbase-$(CONFIG_MALI_DEVFREQ) += \
     backend/gpu/mali_kbase_devfreq.o
 
-
-ccflags-y += \
-	-I$(src)/platform/mtk_platform_common/
-
