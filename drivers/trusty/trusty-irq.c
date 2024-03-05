@@ -394,7 +394,7 @@ static int trusty_irq_init_normal_irq(struct trusty_irq_state *is, int tirq)
 	hlist_add_head(&trusty_irq->node, &is->normal_irqs.inactive);
 	spin_unlock_irqrestore(&is->normal_irqs_lock, irq_flags);
 
-	ret = request_irq(irq, trusty_irq_handler, IRQF_NO_THREAD,
+	ret = request_irq(irq, trusty_irq_handler, IRQF_NO_THREAD | IRQF_NOBALANCING,
 			  "trusty", trusty_irq);
 	if (ret) {
 		dev_err(is->dev, "request_irq failed %d\n", ret);
