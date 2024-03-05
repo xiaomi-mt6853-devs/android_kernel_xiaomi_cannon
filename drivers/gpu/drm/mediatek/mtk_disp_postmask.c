@@ -561,7 +561,7 @@ static int mtk_disp_postmask_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, priv);
 
 	ret = devm_request_irq(dev, irq, mtk_postmask_irq_handler,
-			       IRQF_TRIGGER_NONE | IRQF_SHARED, dev_name(dev),
+			       IRQF_TRIGGER_NONE | IRQF_SHARED | IRQF_NOBALANCING, dev_name(dev),
 			       priv);
 	if (ret < 0) {
 		DDPAEE("%s:%d, failed to request irq:%d ret:%d comp_id:%d\n",

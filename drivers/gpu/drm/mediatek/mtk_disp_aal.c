@@ -2837,7 +2837,7 @@ static int mtk_disp_aal_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, priv);
 
 	ret = devm_request_irq(dev, irq, mtk_disp_aal_irq_handler,
-		IRQF_TRIGGER_NONE | IRQF_SHARED, dev_name(dev), priv);
+		IRQF_TRIGGER_NONE | IRQF_SHARED | IRQF_NOBALANCING, dev_name(dev), priv);
 	if (ret)
 		dev_err(dev, "devm_request_irq fail: %d\n", ret);
 
