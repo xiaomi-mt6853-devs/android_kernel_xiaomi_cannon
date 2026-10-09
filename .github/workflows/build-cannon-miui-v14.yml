@@ -22,7 +22,7 @@ jobs:
           unzip -q sukisu.zip
           mv SukiSU-Ultra-main sukisu
 
-          # 在内核根目录执行setup.sh，这是关键修复！
+          # 在内核根目录执行setup.sh
           cd "${GITHUB_WORKSPACE}"
           bash sukisu/kernel/setup.sh susfs-main sukisu
 
@@ -40,10 +40,10 @@ jobs:
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
 
-      - name: 下载AOSP Clang android-14.0.0_r47
+      - name: 下载 ZyCromerZ Clang 18（稳定可用，cannon推荐）
         run: |
           mkdir -p clang
-          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/ClangBuiltLinux/aosp-clang/releases/download/android-14.0.0_r47/clang.tar.gz -O clang.tar.gz
+          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/ZyCromerZ/Clang/releases/download/18.0.0-20230728-release/Clang-18.0.0-20230728.tar.gz -O clang.tar.gz
           tar -xf clang.tar.gz -C clang
           echo "CLANG_BIN=${GITHUB_WORKSPACE}/clang/bin" >> "${GITHUB_ENV}"
           echo "PATH=${GITHUB_WORKSPACE}/clang/bin:${PATH}" >> "${GITHUB_ENV}"
@@ -52,7 +52,6 @@ jobs:
         run: |
           export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
-          # 自动查找defconfig
           DEFCONFIG=$(ls arch/arm64/configs/*cannon*defconfig | head -n1)
           if [ -z "${DEFCONFIG}" ];then
             echo "❌ 找不到cannon的defconfig！检查 arch/arm64/configs/"
