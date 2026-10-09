@@ -16,17 +16,22 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 拉取 SukiSU-Ultra + SUSFS + AnyKernel3（带重试）
+      - name: 下载源码包（wget，避开git clone网络bug）
         run: |
-          # 克隆函数：ghproxy优先，失败自动切原生github
-          clone_repo(){
-            local url=$1
-            local dir=$2
-            git clone --depth=1 https://mirror.ghproxy.com/${url} ${dir} || git clone --depth=1 https://${url} ${dir}
-          }
-          clone_repo github.com/SukiSU-Ultra/SukiSU-Ultra.git sukisu
-          clone_repo github.com/SukiSU-Ultra/SUSFS.git susfs
-          clone_repo github.com/osm0sis/AnyKernel3.git ak3
+          # SukiSU-Ultra
+          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
+          unzip -q sukisu.zip
+          mv SukiSU-Ultra-main sukisu
+
+          # SUSFS
+          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SUSFS/archive/refs/heads/main.zip -O susfs.zip
+          unzip -q susfs.zip
+          mv SUSFS-main susfs
+
+          # AnyKernel3
+          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -O ak3.zip
+          unzip -q ak3.zip
+          mv AnyKernel3-master ak3
 
       - name: 获取版本信息
         id: version_info
