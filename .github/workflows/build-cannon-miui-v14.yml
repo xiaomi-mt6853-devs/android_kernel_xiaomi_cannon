@@ -40,11 +40,10 @@ jobs:
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
 
-      - name: 下载AOSP Clang（带重试）
+      - name: 下载AOSP Clang android-14.0.0_r47
         run: |
           mkdir -p clang
-          CLANG_TAG="android-14.0.0_r47"
-          curl --retry 3 -L https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/${CLANG_TAG}/clang.tar.gz -o clang.tar.gz
+          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/ClangBuiltLinux/aosp-clang/releases/download/android-14.0.0_r47/clang.tar.gz -O clang.tar.gz
           tar -xf clang.tar.gz -C clang
           echo "CLANG_BIN=${GITHUB_WORKSPACE}/clang/bin" >> "${GITHUB_ENV}"
           echo "PATH=${GITHUB_WORKSPACE}/clang/bin:${PATH}" >> "${GITHUB_ENV}"
