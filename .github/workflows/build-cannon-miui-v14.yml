@@ -21,19 +21,19 @@ jobs:
 
       - name: Pull latest SukiSU-Ultra & SUSFS & AnyKernel3
         run: |
-          # Download SukiSU-Ultra
-          wget -q https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
-          unzip -q sukisu.zip
+          # SukiSU-Ultra
+          curl -L --retry 3 -A "Mozilla/5.0" https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -o sukisu.zip
+          unzip sukisu.zip
           mv SukiSU-Ultra-main sukisu
 
-          # Download SUSFS
-          wget -q https://github.com/SukiSU-Ultra/SUSFS/archive/refs/heads/main.zip -O susfs.zip
-          unzip -q susfs.zip
+          # SUSFS
+          curl -L --retry 3 -A "Mozilla/5.0" https://github.com/SukiSU-Ultra/SUSFS/archive/refs/heads/main.zip -o susfs.zip
+          unzip susfs.zip
           mv SUSFS-main susfs
 
-          # Download AnyKernel3
-          wget -q https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -O ak3.zip
-          unzip -q ak3.zip
+          # AnyKernel3
+          curl -L --retry 3 -A "Mozilla/5.0" https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -o ak3.zip
+          unzip ak3.zip
           mv AnyKernel3-master ak3
 
       - name: Get SukiSU Rev & Build Date
@@ -50,13 +50,13 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           LATEST_APK_URL=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
-          wget -q "$LATEST_APK_URL" -O sukisu-manager.apk
+          curl -L --retry 3 -A "Mozilla/5.0" "$LATEST_APK_URL" -o sukisu-manager.apk
 
       - name: Download latest AOSP Clang
         run: |
           mkdir -p clang
           LATEST_CLANG=$(curl -s https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main?format=TEXT | base64 -d | grep -E "refs/tags/android-[0-9.]+_r[0-9]+" | tail -1 | awk '{print $2}')
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/$LATEST_CLANG/clang.tar.gz
+          curl -L --retry 3 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/$LATEST_CLANG/clang.tar.gz -o clang.tar.gz
           tar -xf clang.tar.gz -C clang
           echo "CLANG_BIN=$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_ENV
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
@@ -88,7 +88,7 @@ jobs:
           echo "BuildDate:${{ env.BUILD_DATE }}" > info_date.txt
           echo "SukiSU_Rev:${{ env.SU_REV }}" > info_rev.txt
 
-          # 逐行echo写入anykernel.sh，完全无heredoc，消除YAML报错
+          # 逐行echo写入anykernel.sh，无heredoc，消除YAML报错
           echo 'ui_print("=====================================")' > anykernel.sh
           echo 'ui_print("  KPM Package")' >> anykernel.sh
           echo 'ui_print("  Build Date: $BUILD_DATE")' >> anykernel.sh
