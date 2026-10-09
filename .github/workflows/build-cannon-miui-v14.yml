@@ -22,17 +22,11 @@ jobs:
         run: |
           set -euo pipefail
           # SukiSU-Ultra
-          curl -L --retry 3 -A "Mozilla/5.0" https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -o sukisu.zip
-          unzip -q sukisu.zip
-          mv SukiSU-Ultra-main sukisu
+          git clone --depth=1 https://github.com/SukiSU-Ultra/SukiSU-Ultra.git sukisu
           # SUSFS
-          curl -L --retry 3 -A "Mozilla/5.0" https://github.com/SukiSU-Ultra/SUSFS/archive/refs/heads/main.zip -o susfs.zip
-          unzip -q susfs.zip
-          mv SUSFS-main susfs
+          git clone --depth=1 https://github.com/SukiSU-Ultra/SUSFS.git susfs
           # AnyKernel3
-          curl -L --retry 3 -A "Mozilla/5.0" https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -o ak3.zip
-          unzip -q ak3.zip
-          mv AnyKernel3-master ak3
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git ak3
 
       - name: Get SukiSU Rev & Build Date
         id: version_info
