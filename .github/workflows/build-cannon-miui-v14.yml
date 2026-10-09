@@ -1,17 +1,10 @@
-name: MIUI14.0.6 Cannon | DynamicName KPM+SUSFS+APK
+name: MIUI14.0.6 Cannon | KPM+SUSFS+APK
 on:
   workflow_dispatch:
-    inputs:
-      CUSTOM_NAME:
-        description: 'Custom Kernel Name（内核自定义名称）'
-        required: true
-        default: "MySukiSU"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      CUSTOM_NAME: ${{ github.event.inputs.CUSTOM_NAME }}
     steps:
       - name: Install dependencies
         run: |
@@ -45,7 +38,7 @@ jobs:
           BUILD_DATE=$(date +%Y-%m-%d)
           echo "SU_REV=$SU_REV" >> $GITHUB_ENV
           echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          echo "Build Info: ${{ env.CUSTOM_NAME }} | $BUILD_DATE | $SU_REV"
+          echo "Build Info | $BUILD_DATE | $SU_REV"
 
       - name: Download LATEST SukiSU-Ultra Manager APK
         run: |
@@ -66,7 +59,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/sukisu
           bash kernel/patch.sh $GITHUB_WORKSPACE/boot-14.img
-          cp patched-boot.img $GITHUB_WORKSPACE/${{ env.CUSTOM_NAME }}_boot_MIUI14_${{ env.BUILD_DATE }}_${{ env.SU_REV }}.img
+          cp patched-boot.img $GITHUB_WORKSPACE/MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}_boot.img
 
       - name: Build KPM LKM modules（SukiSU + SUSFS）
         run: |
@@ -76,7 +69,7 @@ jobs:
           cd $GITHUB_WORKSPACE/susfs
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang M=$PWD
 
-      - name: Build AnyKernel3 Zip，嵌入自定义名称+版本信息
+      - name: Build AnyKernel3 Zip
         run: |
           cd $GITHUB_WORKSPACE/ak3
           rm -rf modules
@@ -85,39 +78,35 @@ jobs:
           cp $GITHUB_WORKSPACE/susfs/*.ko modules/
           cp $GITHUB_WORKSPACE/sukisu-manager.apk ./manager.apk
 
-          # 写入版本记录文件放进刷机包内
-          echo "${{ env.CUSTOM_NAME }}" > info_name.txt
+          # 版本记录文件
           echo "BuildDate:${{ env.BUILD_DATE }}" > info_date.txt
           echo "SukiSU_Rev:${{ env.SU_REV }}" > info_rev.txt
 
-          # 【重点修复】先写入环境变量到anykernel.sh头部
-          echo "export CUSTOM_NAME='${{ env.CUSTOM_NAME }}'" > anykernel.sh
-          echo "export BUILD_DATE='${{ env.BUILD_DATE }}'" >> anykernel.sh
-          echo "export SU_REV='${{ env.SU_REV }}'" >> anykernel.sh
+          # 逐行echo写入anykernel.sh，完全无heredoc，消除YAML报错
+          echo 'ui_print("=====================================")' > anykernel.sh
+          echo 'ui_print("  KPM Package")' >> anykernel.sh
+          echo 'ui_print("  Build Date: $BUILD_DATE")' >> anykernel.sh
+          echo 'ui_print("  SukiSU Commit: $SU_REV")' >> anykernel.sh
+          echo 'ui_print("  Platform: MIUI14 cannon")' >> anykernel.sh
+          echo 'ui_print("=====================================")' >> anykernel.sh
+          echo 'ui_print("- Loading KPM & SUSFS modules")' >> anykernel.sh
+          echo 'ui_print("- Included Manager APK")' >> anykernel.sh
+          echo 'ui_print("")' >> anykernel.sh
+          echo 'ui_print("- Try install Manager APK")' >> anykernel.sh
+          echo 'pm install /tmp/manager.apk' >> anykernel.sh
 
-          # 追加刷入界面文本
-          cat >> anykernel.sh <<'EOF'
-ui_print("=====================================")
-ui_print("  ${CUSTOM_NAME} KPM Package")
-ui_print("  Build Date: ${BUILD_DATE}")
-ui_print("  SukiSU Commit: ${SU_REV}")
-ui_print("  Platform: MIUI14 cannon")
-ui_print("=====================================")
-ui_print("- Loading KPM & SUSFS modules")
-ui_print("- Included Manager APK")
-ui_print("")
-ui_print("- Try install ${CUSTOM_NAME} Manager APK")
-pm install /tmp/manager.apk
-EOF
+          # 在脚本头部注入版本变量
+          sed -i "1i export BUILD_DATE='${{ env.BUILD_DATE }}'" anykernel.sh
+          sed -i "1i export SU_REV='${{ env.SU_REV }}'" anykernel.sh
 
-          ZIP_NAME="${{ env.CUSTOM_NAME }}_KPM_AK3_MIUI14_${{ env.BUILD_DATE }}_${{ env.SU_REV }}.zip"
+          ZIP_NAME="MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}_KPM_AK3.zip"
           zip -r9 $GITHUB_WORKSPACE/$ZIP_NAME *
           echo "ZIP_FILE=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.CUSTOM_NAME }}_MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}
+          name: MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}
           path: |
-            ${{ env.CUSTOM_NAME }}_boot_MIUI14_${{ env.BUILD_DATE }}_${{ env.SU_REV }}.img
-            ${{ env.ZIP_FILE }}
+            ${{ github.workspace }}/MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}_boot.img
+            ${{ github.workspace }}/${{ env.ZIP_FILE }}
