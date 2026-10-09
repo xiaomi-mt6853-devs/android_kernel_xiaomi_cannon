@@ -1,16 +1,23 @@
-name: MIUI14.0.6 Cannon | AutoExtractBoot + Patch + Build SukiSU KPM AnyKernel3
+name: MIUI14.0.6 Cannon KPM+SUSFS+APK
 on:
-  workflow_dispatch
+  workflow_dispatch:
+    inputs:
+      CUSTOM_NAME:
+        description: 'Custom Kernel Name（内核自定义名称）'
+        required: true
+        default: "MySukiSU"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CUSTOM_NAME: ${{ github.event.inputs.CUSTOM_NAME }}
     steps:
       - name: Install dependencies
         run: |
           sudo apt update -y
           sudo apt upgrade -y
-          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils
+          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
 
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -20,7 +27,6 @@ jobs:
       - name: Download OFFICIAL MIUI14.0.6 cannon fastboot rom
         run: |
           cd $GITHUB_WORKSPACE
-          # cannon V14.0.6.0.SJECNXM 官方包
           wget -q https://bigota.d.miui.com/V14.0.6.0.SJECNXM/cannon_images_V14.0.6.0.SJECNXM_20231017.0000.00_12.0_cn_ce9fc0ac48.tgz -O miui14-cannon.tgz
           tar -xf miui14-cannon.tgz
           cp cannon_images_V14.0.6.0.SJECNXM_20231017.0000.00_12.0_cn_ce9fc0ac48/boot.img boot-14.img
@@ -30,6 +36,22 @@ jobs:
           git clone --depth=1 https://github.com/SukiSU-Ultra/SukiSU-Ultra.git sukisu
           git clone --depth=1 https://github.com/SukiSU-Ultra/SUSFS.git susfs
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git ak3
+
+      - name: Get SukiSU Rev & Build Date
+        id: version_info
+        run: |
+          cd $GITHUB_WORKSPACE/sukisu
+          SU_REV=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date +%Y-%m-%d)
+          echo "SU_REV=$SU_REV" >> $GITHUB_ENV
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          echo "Build Info: ${{ env.CUSTOM_NAME }} | $BUILD_DATE | $SU_REV"
+
+      - name: Download LATEST SukiSU-Ultra Manager APK
+        run: |
+          cd $GITHUB_WORKSPACE
+          LATEST_APK_URL=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
+          wget -q "$LATEST_APK_URL" -O sukisu-manager.apk
 
       - name: Download latest AOSP Clang
         run: |
@@ -44,7 +66,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/sukisu
           bash kernel/patch.sh $GITHUB_WORKSPACE/boot-14.img
-          cp patched-boot.img $GITHUB_WORKSPACE/boot-kpm-sukisu-miui14.img
+          cp patched-boot.img $GITHUB_WORKSPACE/${{ env.CUSTOM_NAME }}_boot_MIUI14_${{ env.BUILD_DATE }}_${{ env.SU_REV }}.img
 
       - name: Build KPM LKM modules（SukiSU + SUSFS）
         run: |
@@ -54,19 +76,42 @@ jobs:
           cd $GITHUB_WORKSPACE/susfs
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang M=$PWD
 
-      - name: Build AnyKernel3 KPM Zip包（SukiSU KPM AnyKernel3）
+      - name: Build AnyKernel3 Zip，嵌入自定义名称+版本信息
         run: |
           cd $GITHUB_WORKSPACE/ak3
           rm -rf modules
           mkdir modules
           cp $GITHUB_WORKSPACE/sukisu/kernel/*.ko modules/
           cp $GITHUB_WORKSPACE/susfs/*.ko modules/
-          zip -r9 $GITHUB_WORKSPACE/SukiSU-KPM-AK3-MIUI14-cannon.zip *
+          cp $GITHUB_WORKSPACE/sukisu-manager.apk ./manager.apk
 
-      - name: Upload产物
+          # 写入版本记录文件放进刷机包内
+          echo "${{ env.CUSTOM_NAME }}" > info_name.txt
+          echo "BuildDate:${{ env.BUILD_DATE }}" > info_date.txt
+          echo "SukiSU_Rev:${{ env.SU_REV }}" > info_rev.txt
+
+          # TWRP刷入打印信息
+          cat >> anykernel.sh <<EOF
+ui_print("=====================================")
+ui_print("  ${{ env.CUSTOM_NAME }} KPM Package")
+ui_print("  Build Date: ${{ env.BUILD_DATE }}")
+ui_print("  SukiSU Commit: ${{ env.SU_REV }}")
+ui_print("  Platform: MIUI14 cannon")
+ui_print("=====================================")
+ui_print("- Loading KPM & SUSFS modules")
+ui_print("- Included Manager APK")
+ui_print("")
+ui_print("- Try install ${{ env.CUSTOM_NAME }} Manager APK")
+pm install /tmp/manager.apk
+EOF
+          ZIP_NAME="${{ env.CUSTOM_NAME }}_KPM_AK3_MIUI14_${{ env.BUILD_DATE }}_${{ env.SU_REV }}.zip"
+          zip -r9 $GITHUB_WORKSPACE/$ZIP_NAME *
+          echo "ZIP_FILE=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MIUI14-cannon-sukisu-kpm-full
+          name: ${{ env.CUSTOM_NAME }}_MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}
           path: |
-            boot-kpm-sukisu-miui14.img
-            SukiSU-KPM-AK3-MIUI14-cannon.zip
+            ${{ env.CUSTOM_NAME }}_boot_MIUI14_${{ env.BUILD_DATE }}_${{ env.SU_REV }}.img
+            ${{ env.ZIP_FILE }}
