@@ -1,113 +1,140 @@
-name: Build SukiSU KPM Cannon 4.14.186
+name: Cannon MT6853 MIUI14 内核 + SukiSU KPM
 on:
   workflow_dispatch:
-
+env:
+  PROJECT_NAME: Cannon-SukiSU-Kernel
+  VERSION: V1.0
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-      - name: 安装基础依赖 + gcc8交叉编译器
-        run: |
-          sudo apt update -y
-          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
-          sudo apt install -y gcc-8-aarch64-linux-gnu g++-8-aarch64-linux-gnu
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=aarch64-linux-gnu-gcc-8
+    - uses: actions/checkout@v3
+      name: 检出fork仓库源码
 
-      - name: 拉取cannon内核源码
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+    - name: 构建编译内核环境
+      run: |
+        sudo apt-get update
+        sudo -E apt-get -y -qq install git make bc bison ccache openssl dos2unix zip kmod cpio flex libelf-dev curl libssl-dev wget device-tree-compiler ca-certificates python3 python2 binutils binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi abootimg
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace
+        cp -r $GITHUB_WORKSPACE/* $GITHUB_WORKSPACE/kernel_workspace/android-kernel/
 
-      - name: 获取SukiSU Ultra（开启KPM）
-        run: |
-          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
-          unzip -q sukisu.zip
-          mv SukiSU-Ultra-main sukisu
+    - name: 下载 AOSP GCC4.9 交叉编译器
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        
+        mkdir gcc64
+        wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
+        tar -C gcc64/ -zxvf gcc-aarch64.tar.gz
+    
+        mkdir gcc32
+        wget -O gcc-arm.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
+        tar -C gcc32/ -zxvf gcc-arm.tar.gz
 
-          cd "${GITHUB_WORKSPACE}"
-          bash sukisu/kernel/setup.sh KPM=1 susfs-main sukisu
+    - name: 下载 AOSP Clang10
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        mkdir clang-aosp
+        git clone -q --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 -b 10.0 clang-aosp
 
-          # AnyKernel3
-          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -O ak3.zip
-          unzip -q ak3.zip
-          mv AnyKernel3-master ak3
+    - name: 4.14内核打 set_memory.h 补丁（KPM必备）
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        curl -LSs https://raw.githubusercontent.com/qwerty27817/xiaomi_sm8250_kernel_auto_build/main/patches/4.14-set_memory-backport.patch -o set_memory.patch
+        git apply set_memory.patch || true
+        echo "==== set_memory.h 补丁应用完成 ===="
 
-      - name: 获取版本信息
-        id: version_info
-        run: |
-          cd "${GITHUB_WORKSPACE}/sukisu"
-          SU_REV=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date +%Y-%m-%d)
-          echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
-          echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
+    - name: 集成 SukiSU-Ultra 开启KPM
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        rm -rf sukisu
+        wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
+        unzip -q sukisu.zip
+        mv SukiSU-Ultra-main sukisu
 
-      - name: 打印编译器版本
-        run: |
-          aarch64-linux-gnu-gcc-8 --version
+        export KPM=1
+        bash sukisu/kernel/setup.sh susfs-main sukisu
 
-      - name: 加载defconfig，开启模块支持，modules_prepare
-        run: |
-          cd "${GITHUB_WORKSPACE}"
-          DEFCONFIG=$(ls arch/arm64/configs/*cannon*defconfig | head -n1)
-          if [ -z "${DEFCONFIG}" ];then
-            echo "❌ 找不到cannon的defconfig！检查 arch/arm64/configs/"
-            exit 1
-          fi
-          echo "✅ 使用defconfig: ${DEFCONFIG}"
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 $(basename ${DEFCONFIG})
-          # 开启模块，关闭VDSO
-          sed -i 's/# CONFIG_MODULES is not set/CONFIG_MODULES=y/' .config
-          sed -i 's/CONFIG_MODULES=n/CONFIG_MODULES=y/' .config
-          sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 olddefconfig
-          grep CONFIG_MODULES .config
-          # 只做modules_prepare，不编译全部内核模块
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 modules_prepare
+    - name: 设置ccache缓存
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: build-cannon-mt6853-full-kernel-sukisu-kpm
+        max-size: 2G
 
-      - name: 编译SukiSU KPM模块
-        run: |
-          cd "${GITHUB_WORKSPACE}"
-          echo "===== 编译前 sukisu/kernel 文件列表 ====="
-          ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 M=${GITHUB_WORKSPACE}/sukisu/kernel modules
-          echo "===== 编译后 sukisu/kernel 文件列表 ====="
-          ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"
-          ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"*.ko 2>/dev/null || echo "❌ 没有找到ko文件"
+    - name: 加载defconfig，开启KPM内核配置
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
 
-      - name: 构建AnyKernel3 KPM卡刷包
-        run: |
-          cd "${GITHUB_WORKSPACE}/ak3"
-          rm -rf modules
-          mkdir -p modules
-          KO_PATH="${GITHUB_WORKSPACE}/sukisu/kernel/"
-          KO_FILES=$(ls ${KO_PATH}*.ko 2>/dev/null || true)
-          if [ -z "${KO_FILES}" ];then
-            echo "❌ 没有找到ko模块文件！停止打包"
-            exit 1
-          fi
-          cp ${KO_PATH}*.ko modules/
+        make -s -j$(nproc --all) O=out ARCH=arm64 mt6853-ss_defconfig
 
-          echo "BuildDate:${BUILD_DATE}" > info_date.txt
-          echo "SukiSU_Rev:${SU_REV}" > info_rev.txt
+        # KPM必需配置，顺序不能乱
+        sed -i 's/# CONFIG_DEBUG_KERNEL is not set/CONFIG_DEBUG_KERNEL=y/' out/.config
+        sed -i 's/CONFIG_DEBUG_KERNEL=n/CONFIG_DEBUG_KERNEL=y/' out/.config
 
-          > anykernel.sh
-          echo 'ui_print("=====================================")' >> anykernel.sh
-          echo 'ui_print("  SukiSU Ultra KPM Package")' >> anykernel.sh
-          echo 'ui_print("  Build Date: '"${BUILD_DATE}"'")' >> anykernel.sh
-          echo 'ui_print("  SukiSU Commit: '"${SU_REV}"'")' >> anykernel.sh
-          echo 'ui_print("  Device: Xiaomi cannon 4.14.186 Non-GKI")' >> anykernel.sh
-          echo 'ui_print("=====================================")' >> anykernel.sh
-          echo 'ui_print("- Loading KPM & SUSFS modules")' >> anykernel.sh
-          echo 'ui_print("")' >> anykernel.sh
+        sed -i 's/# CONFIG_MODULES is not set/CONFIG_MODULES=y/' out/.config
+        sed -i 's/CONFIG_MODULES=n/CONFIG_MODULES=y/' out/.config
 
-          ZIP_NAME="cannon_4.14.186_SukiSU_KPM_${BUILD_DATE}_${SU_REV}.zip"
-          zip -r9 "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
-          echo "ZIP_FILE=${ZIP_NAME}" >> "${GITHUB_ENV}"
+        sed -i 's/# CONFIG_KALLSYMS is not set/CONFIG_KALLSYMS=y/' out/.config
+        sed -i 's/CONFIG_KALLSYMS=n/CONFIG_KALLSYMS=y/' out/.config
 
-      - name: 上传AnyKernel3卡刷包
-        uses: actions/upload-artifact@v4
-        with:
-          name: cannon_4.14.186_SukiSU_KPM_${BUILD_DATE}_${SU_REV}
-          path: |
-            ${{ github.workspace }}/${{ env.ZIP_FILE }}
+        sed -i 's/# CONFIG_KALLSYMS_ALL is not set/CONFIG_KALLSYMS_ALL=y/' out/.config
+        sed -i 's/CONFIG_KALLSYMS_ALL=n/CONFIG_KALLSYMS_ALL=y/' out/.config
+
+        sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' out/.config
+
+        make O=out ARCH=arm64 olddefconfig
+
+        # 校验配置
+        grep -E "CONFIG_DEBUG_KERNEL|CONFIG_MODULES|CONFIG_KALLSYMS|CONFIG_KALLSYMS_ALL" out/.config
+
+        # 模块编译前置
+        make -j$(nproc --all) CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld modules_prepare
+
+    - name: 编译完整内核 Image.gz-dtb
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
+        make -j$(nproc --all) CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld
+        echo "==== 完整内核编译完成 ===="
+
+    - name: 编译 SukiSU KPM模块 sukisu.ko
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
+        make -j$(nproc --all) CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld M=$PWD/sukisu/kernel modules
+
+        find sukisu/kernel -name "*.ko"
+        if [ ! -f sukisu/kernel/sukisu.ko ];then
+          echo "❌ sukisu.ko 编译失败"
+          exit 1
+        fi
+
+    - name: 打包 new-boot.img（带版本命名）
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        cp android-kernel/boot-14.img base-boot.img
+        abootimg -x base-boot.img bootimg.cfg initrd.img zImage
+        cp android-kernel/out/arch/arm64/boot/Image.gz-dtb zImage
+        abootimg --create ${PROJECT_NAME}-${VERSION}.img -f bootimg.cfg -k zImage -r initrd.img
+        echo "✅ ${PROJECT_NAME}-${VERSION}.img 打包完成"
+
+    - name: 制作内核AnyKernel3卡刷包（版本命名zip）
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone https://github.com/osm0sis/AnyKernel3 ak
+        sed -i 's/do.devicecheck=1/do.devicecheck=0/g' ak/anykernel.sh
+        sed -i 's!block=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!block=auto;!g' ak/anykernel.sh
+        sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' ak/anykernel.sh
+        cp android-kernel/out/arch/arm64/boot/Image.gz-dtb ak/
+        rm -rf ak/.git* ak/README.md
+        cd ak
+        zip -r ../${PROJECT_NAME}-${VERSION}.zip .
+        cd ..
+
+    - name: 上传产物
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${PROJECT_NAME}-${VERSION}-Release
+        path: |
+          kernel_workspace/${{ env.PROJECT_NAME }}-${{ env.VERSION }}.img
+          kernel_workspace/${{ env.PROJECT_NAME }}-${{ env.VERSION }}.zip
