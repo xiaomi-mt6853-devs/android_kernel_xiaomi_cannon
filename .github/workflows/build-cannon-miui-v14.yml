@@ -1,4 +1,4 @@
-name: MIUI14.0.6 Cannon | KPM+SUSFS+APK
+name: Build SukiSU KPM Cannon
 on:
   workflow_dispatch:
 
@@ -6,98 +6,88 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install dependencies
+      - name: 安装依赖包
         run: |
-          set -euo pipefail
           sudo apt update -y
-          sudo apt upgrade -y
           sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
 
-      - name: Checkout 你的cannon内核源码仓库
+      - name: 拉取cannon内核源码
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: 拉取 SukiSU-Ultra + SUSFS + AnyKernel3
+      - name: 拉取 SukiSU-Ultra + SUSFS + AnyKernel3（带重试）
         run: |
-          set -euo pipefail
-          # SukiSU-Ultra
-          git clone --depth=1 https://github.com/SukiSU-Ultra/SukiSU-Ultra.git sukisu
-          # SUSFS
-          git clone --depth=1 https://github.com/SukiSU-Ultra/SUSFS.git susfs
-          # AnyKernel3
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git ak3
+          # 克隆函数：ghproxy优先，失败自动切原生github
+          clone_repo(){
+            local url=$1
+            local dir=$2
+            git clone --depth=1 https://mirror.ghproxy.com/${url} ${dir} || git clone --depth=1 https://${url} ${dir}
+          }
+          clone_repo github.com/SukiSU-Ultra/SukiSU-Ultra.git sukisu
+          clone_repo github.com/SukiSU-Ultra/SUSFS.git susfs
+          clone_repo github.com/osm0sis/AnyKernel3.git ak3
 
-      - name: Get SukiSU Rev & Build Date
+      - name: 获取版本信息
         id: version_info
         run: |
-          set -euo pipefail
           cd "${GITHUB_WORKSPACE}/sukisu"
           SU_REV=$(git rev-parse --short HEAD)
           BUILD_DATE=$(date +%Y-%m-%d)
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
-          echo "Build Info | ${BUILD_DATE} | ${SU_REV}"
 
-      - name: Download SukiSU Manager APK
+      - name: 下载AOSP Clang（带重试）
         run: |
-          set -euo pipefail
-          cd "${GITHUB_WORKSPACE}"
-          LATEST_APK_URL=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
-          curl -L --retry 3 -A "Mozilla/5.0" "${LATEST_APK_URL}" -o sukisu-manager.apk
-
-      - name: 下载AOSP Clang工具链
-        run: |
-          set -euo pipefail
           mkdir -p clang
           CLANG_TAG="android-14.0.0_r47"
-          curl -L --retry 3 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/${CLANG_TAG}/clang.tar.gz -o clang.tar.gz
+          curl --retry 3 -L https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/${CLANG_TAG}/clang.tar.gz -o clang.tar.gz
           tar -xf clang.tar.gz -C clang
           echo "CLANG_BIN=${GITHUB_WORKSPACE}/clang/bin" >> "${GITHUB_ENV}"
           echo "PATH=${GITHUB_WORKSPACE}/clang/bin:${PATH}" >> "${GITHUB_ENV}"
 
-      - name: 【关键】配置cannon内核，准备模块编译环境
+      - name: 检测并加载cannon内核配置
         run: |
-          set -euo pipefail
           export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
-          # 加载cannon的defconfig，小米cannon在arch/arm64/configs
-          make ARCH=arm64 CC=clang cannon_defconfig
-          # 生成编译外部模块所需要的内核头文件
+          # 自动查找defconfig
+          DEFCONFIG=$(ls arch/arm64/configs/*cannon*defconfig | head -n1)
+          if [ -z "${DEFCONFIG}" ];then
+            echo "❌ 找不到cannon的defconfig！检查 arch/arm64/configs/"
+            exit 1
+          fi
+          echo "✅ 使用defconfig: ${DEFCONFIG}"
+          make ARCH=arm64 CC=clang $(basename ${DEFCONFIG})
           make ARCH=arm64 CC=clang modules_prepare
 
-      - name: 编译SukiSU 和 SUSFS LKM模块（重点！在内核源码目录编译外部模块）
+      - name: 编译SukiSU KPM + SUSFS LKM模块
         run: |
-          set -euo pipefail
           export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
-          # 编译SukiSU模块
           make ARCH=arm64 CC=clang M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
-          # 编译SUSFS模块
           make ARCH=arm64 CC=clang M=${GITHUB_WORKSPACE}/susfs
 
-      - name: Patch boot-14.img，开启KPM
+      - name: Patch boot镜像
         run: |
-          set -euo pipefail
           cd "${GITHUB_WORKSPACE}/sukisu"
+          if [ ! -f "${GITHUB_WORKSPACE}/boot-14.img" ];then
+            echo "❌ 仓库根目录缺少 boot-14.img！"
+            exit 1
+          fi
           bash kernel/patch.sh "${GITHUB_WORKSPACE}/boot-14.img"
           cp patched-boot.img "${GITHUB_WORKSPACE}/MIUI14_cannon_${BUILD_DATE}_${SU_REV}_boot.img"
 
-      - name: Build AnyKernel3 Zip
+      - name: 构建AnyKernel3卡刷包
         run: |
-          set -euo pipefail
           cd "${GITHUB_WORKSPACE}/ak3"
           rm -rf modules
           mkdir -p modules
-          # 把编译出来的ko复制到ak3模块文件夹
           cp "${GITHUB_WORKSPACE}/sukisu/kernel"/*.ko modules/
           cp "${GITHUB_WORKSPACE}/susfs"/*.ko modules/
-          cp "${GITHUB_WORKSPACE}/sukisu-manager.apk" ./manager.apk
 
           echo "BuildDate:${BUILD_DATE}" > info_date.txt
           echo "SukiSU_Rev:${SU_REV}" > info_rev.txt
 
-          # 逐行echo生成anykernel.sh，无EOF报错
           > anykernel.sh
           echo 'ui_print("=====================================")' >> anykernel.sh
           echo 'ui_print("  KPM Package")' >> anykernel.sh
@@ -106,11 +96,7 @@ jobs:
           echo 'ui_print("  Platform: MIUI14 cannon")' >> anykernel.sh
           echo 'ui_print("=====================================")' >> anykernel.sh
           echo 'ui_print("- Loading KPM & SUSFS modules")' >> anykernel.sh
-          echo 'ui_print("- Included Manager APK")' >> anykernel.sh
           echo 'ui_print("")' >> anykernel.sh
-          echo 'ui_print("- Try install Manager APK")' >> anykernel.sh
-          echo '# NOTE: Recovery 环境没有pm，这条命令仅在Android系统内生效，卡刷不会执行成功' >> anykernel.sh
-          echo '# pm install /tmp/manager.apk' >> anykernel.sh
 
           sed -i "1i BUILD_DATE='${BUILD_DATE}'" anykernel.sh
           sed -i "1i SU_REV='${SU_REV}'" anykernel.sh
@@ -119,7 +105,7 @@ jobs:
           zip -r9 "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
           echo "ZIP_FILE=${ZIP_NAME}" >> "${GITHUB_ENV}"
 
-      - name: Upload all artifacts
+      - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: MIUI14_cannon_${BUILD_DATE}_${SU_REV}
