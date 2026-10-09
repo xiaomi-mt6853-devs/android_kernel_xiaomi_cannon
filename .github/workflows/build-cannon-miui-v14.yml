@@ -8,88 +8,92 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
+          set -euo pipefail
           sudo apt update -y
           sudo apt upgrade -y
-          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
+          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq aarch64-linux-gnu-gcc
 
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # boot-14.img 手动上传仓库根目录
-
       - name: Pull latest SukiSU-Ultra & SUSFS & AnyKernel3
         run: |
+          set -euo pipefail
           # SukiSU-Ultra
           curl -L --retry 3 -A "Mozilla/5.0" https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -o sukisu.zip
-          unzip sukisu.zip
+          unzip -q sukisu.zip
           mv SukiSU-Ultra-main sukisu
-
           # SUSFS
           curl -L --retry 3 -A "Mozilla/5.0" https://github.com/SukiSU-Ultra/SUSFS/archive/refs/heads/main.zip -o susfs.zip
-          unzip susfs.zip
+          unzip -q susfs.zip
           mv SUSFS-main susfs
-
           # AnyKernel3
           curl -L --retry 3 -A "Mozilla/5.0" https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -o ak3.zip
-          unzip ak3.zip
+          unzip -q ak3.zip
           mv AnyKernel3-master ak3
 
       - name: Get SukiSU Rev & Build Date
         id: version_info
         run: |
-          cd $GITHUB_WORKSPACE/sukisu
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/sukisu"
           SU_REV=$(git rev-parse --short HEAD)
           BUILD_DATE=$(date +%Y-%m-%d)
-          echo "SU_REV=$SU_REV" >> $GITHUB_ENV
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
-          echo "Build Info | $BUILD_DATE | $SU_REV"
+          echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
+          echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
+          echo "Build Info | ${BUILD_DATE} | ${SU_REV}"
 
       - name: Download LATEST SukiSU-Ultra Manager APK
         run: |
-          cd $GITHUB_WORKSPACE
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}"
           LATEST_APK_URL=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
-          curl -L --retry 3 -A "Mozilla/5.0" "$LATEST_APK_URL" -o sukisu-manager.apk
+          curl -L --retry 3 -A "Mozilla/5.0" "${LATEST_APK_URL}" -o sukisu-manager.apk
 
       - name: Download latest AOSP Clang
         run: |
+          set -euo pipefail
           mkdir -p clang
-          LATEST_CLANG=$(curl -s https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main?format=TEXT | base64 -d | grep -E "refs/tags/android-[0-9.]+_r[0-9]+" | tail -1 | awk '{print $2}')
-          curl -L --retry 3 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/$LATEST_CLANG/clang.tar.gz -o clang.tar.gz
+          CLANG_TAG="android-14.0.0_r47"
+          curl -L --retry 3 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/${CLANG_TAG}/clang.tar.gz -o clang.tar.gz
           tar -xf clang.tar.gz -C clang
-          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_ENV
-          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          echo "CLANG_BIN=${GITHUB_WORKSPACE}/clang/bin" >> "${GITHUB_ENV}"
+          echo "PATH=${GITHUB_WORKSPACE}/clang/bin:${PATH}" >> "${GITHUB_ENV}"
 
       - name: Patch boot-14.img，开启KPM
         run: |
-          cd $GITHUB_WORKSPACE/sukisu
-          bash kernel/patch.sh $GITHUB_WORKSPACE/boot-14.img
-          cp patched-boot.img $GITHUB_WORKSPACE/MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}_boot.img
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/sukisu"
+          bash kernel/patch.sh "${GITHUB_WORKSPACE}/boot-14.img"
+          cp patched-boot.img "${GITHUB_WORKSPACE}/MIUI14_cannon_${BUILD_DATE}_${SU_REV}_boot.img"
 
       - name: Build KPM LKM modules（SukiSU + SUSFS）
         run: |
-          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
-          cd $GITHUB_WORKSPACE/sukisu/kernel
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang M=$PWD KPM=1
-          cd $GITHUB_WORKSPACE/susfs
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang M=$PWD
+          set -euo pipefail
+          export PATH="${CLANG_BIN}:${PATH}"
+          cd "${GITHUB_WORKSPACE}/sukisu/kernel"
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang M=$PWD KPM=1
+          cd "${GITHUB_WORKSPACE}/susfs"
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang M=$PWD
 
       - name: Build AnyKernel3 Zip
         run: |
-          cd $GITHUB_WORKSPACE/ak3
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/ak3"
           rm -rf modules
-          mkdir modules
-          cp $GITHUB_WORKSPACE/sukisu/kernel/*.ko modules/
-          cp $GITHUB_WORKSPACE/susfs/*.ko modules/
-          cp $GITHUB_WORKSPACE/sukisu-manager.apk ./manager.apk
+          mkdir -p modules
+          cp "${GITHUB_WORKSPACE}/sukisu/kernel"/*.ko modules/
+          cp "${GITHUB_WORKSPACE}/susfs"/*.ko modules/
+          cp "${GITHUB_WORKSPACE}/sukisu-manager.apk" ./manager.apk
 
-          # 版本记录文件
-          echo "BuildDate:${{ env.BUILD_DATE }}" > info_date.txt
-          echo "SukiSU_Rev:${{ env.SU_REV }}" > info_rev.txt
+          echo "BuildDate:${BUILD_DATE}" > info_date.txt
+          echo "SukiSU_Rev:${SU_REV}" > info_rev.txt
 
-          # 逐行echo写入anykernel.sh，无heredoc，消除YAML报错
-          echo 'ui_print("=====================================")' > anykernel.sh
+          # 逐行echo生成anykernel.sh，移除EOF heredoc，彻底消除报错
+          > anykernel.sh
+          echo 'ui_print("=====================================")' >> anykernel.sh
           echo 'ui_print("  KPM Package")' >> anykernel.sh
           echo 'ui_print("  Build Date: $BUILD_DATE")' >> anykernel.sh
           echo 'ui_print("  SukiSU Commit: $SU_REV")' >> anykernel.sh
@@ -99,20 +103,21 @@ jobs:
           echo 'ui_print("- Included Manager APK")' >> anykernel.sh
           echo 'ui_print("")' >> anykernel.sh
           echo 'ui_print("- Try install Manager APK")' >> anykernel.sh
-          echo 'pm install /tmp/manager.apk' >> anykernel.sh
+          echo '# NOTE: Recovery 环境没有pm，这条命令仅在Android系统内生效，卡刷不会执行成功' >> anykernel.sh
+          echo '# pm install /tmp/manager.apk' >> anykernel.sh
 
-          # 在脚本头部注入版本变量
-          sed -i "1i export BUILD_DATE='${{ env.BUILD_DATE }}'" anykernel.sh
-          sed -i "1i export SU_REV='${{ env.SU_REV }}'" anykernel.sh
+          # 在脚本头部注入变量
+          sed -i "1i BUILD_DATE='${BUILD_DATE}'" anykernel.sh
+          sed -i "1i SU_REV='${SU_REV}'" anykernel.sh
 
-          ZIP_NAME="MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}_KPM_AK3.zip"
-          zip -r9 $GITHUB_WORKSPACE/$ZIP_NAME *
-          echo "ZIP_FILE=$ZIP_NAME" >> $GITHUB_ENV
+          ZIP_NAME="MIUI14_cannon_${BUILD_DATE}_${SU_REV}_KPM_AK3.zip"
+          zip -r9 "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
+          echo "ZIP_FILE=${ZIP_NAME}" >> "${GITHUB_ENV}"
 
       - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}
+          name: MIUI14_cannon_${BUILD_DATE}_${SU_REV}
           path: |
-            ${{ github.workspace }}/MIUI14_cannon_${{ env.BUILD_DATE }}_${{ env.SU_REV }}_boot.img
+            ${{ github.workspace }}/MIUI14_cannon_${BUILD_DATE}_${SU_REV}_boot.img
             ${{ github.workspace }}/${{ env.ZIP_FILE }}
