@@ -59,6 +59,8 @@ jobs:
           fi
           echo "✅ 使用defconfig: ${DEFCONFIG}"
           make ARCH=arm64 CC=clang $(basename ${DEFCONFIG})
+          # 关闭COMPAT_VDSO，解决CROSS_COMPILE_ARM32缺失报错
+          sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
           make ARCH=arm64 CC=clang modules_prepare
 
       - name: 编译SukiSU KPM模块（SUSFS已内置）
