@@ -131,10 +131,15 @@ jobs:
         zip -r ../${PROJECT_NAME}-${VERSION}.zip .
         cd ..
 
-    - name: 上传产物
-      uses: actions/upload-artifact@v3
+    # ========== 修改点：升级到 upload-artifact@v4，分两次上传 ==========
+    - name: 上传 new-boot.img
+      uses: actions/upload-artifact@v4
       with:
-        name: ${PROJECT_NAME}-${VERSION}-Release
-        path: |
-          kernel_workspace/${{ env.PROJECT_NAME }}-${{ env.VERSION }}.img
-          kernel_workspace/${{ env.PROJECT_NAME }}-${{ env.VERSION }}.zip
+        name: ${{ env.PROJECT_NAME }}-${{ env.VERSION }}-boot-img
+        path: kernel_workspace/${{ env.PROJECT_NAME }}-${{ env.VERSION }}.img
+
+    - name: 上传 AnyKernel Zip
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PROJECT_NAME }}-${{ env.VERSION }}-AnyKernel-zip
+        path: kernel_workspace/${{ env.PROJECT_NAME }}-${{ env.VERSION }}.zip
