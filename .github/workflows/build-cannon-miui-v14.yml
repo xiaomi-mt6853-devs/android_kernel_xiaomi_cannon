@@ -17,13 +17,24 @@ jobs:
         with:
           fetch-depth: 1
 
-      # boot-14.img 手动上传仓库根目录，不再下载boot
+      # boot-14.img 手动上传仓库根目录
 
       - name: Pull latest SukiSU-Ultra & SUSFS & AnyKernel3
         run: |
-          git clone --depth=1 https://mirror.ghproxy.com/https://github.com/SukiSU-Ultra/SukiSU-Ultra.git sukisu
-          git clone --depth=1 https://mirror.ghproxy.com/https://github.com/SukiSU-Ultra/SUSFS.git susfs
-          git clone --depth=1 https://mirror.ghproxy.com/https://github.com/osm0sis/AnyKernel3.git ak3
+          # Download SukiSU-Ultra
+          wget -q https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
+          unzip -q sukisu.zip
+          mv SukiSU-Ultra-main sukisu
+
+          # Download SUSFS
+          wget -q https://github.com/SukiSU-Ultra/SUSFS/archive/refs/heads/main.zip -O susfs.zip
+          unzip -q susfs.zip
+          mv SUSFS-main susfs
+
+          # Download AnyKernel3
+          wget -q https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -O ak3.zip
+          unzip -q ak3.zip
+          mv AnyKernel3-master ak3
 
       - name: Get SukiSU Rev & Build Date
         id: version_info
