@@ -16,13 +16,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 获取SukiSU Ultra（内置SUSFS，官方脚本）
+      - name: 获取SukiSU Ultra（内置SUSFS）
         run: |
           wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
           unzip -q sukisu.zip
           mv SukiSU-Ultra-main sukisu
 
-          # 在内核根目录执行setup.sh
           cd "${GITHUB_WORKSPACE}"
           bash sukisu/kernel/setup.sh susfs-main sukisu
 
@@ -40,15 +39,21 @@ jobs:
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
 
-      - name: 下载 ZyCromerZ Clang 14（适配cannon老内核）
+      - name: 下载 ZyCromerZ Clang14.0.6（有效release）
         run: |
           mkdir -p clang
-          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20220825-release/Clang-14.0.6-20220825.tar.gz -O clang.tar.gz
+          wget --retry-connrefused --waitretry=2 --tries=5 https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20250704-release/Clang-14.0.6-20250704.tar.gz -O clang.tar.gz
+          # 校验下载是否成功
+          if [ ! -f clang.tar.gz ]; then
+            echo "Clang压缩包下载失败"
+            exit 1
+          fi
           tar -xf clang.tar.gz -C clang
           echo "CLANG_BIN=${GITHUB_WORKSPACE}/clang/bin" >> "${GITHUB_ENV}"
           echo "PATH=${GITHUB_WORKSPACE}/clang/bin:${PATH}" >> "${GITHUB_ENV}"
+          clang --version
 
-      - name: 检测并加载cannon内核配置
+      - name: 加载defconfig & modules_prepare
         run: |
           export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
@@ -59,11 +64,11 @@ jobs:
           fi
           echo "✅ 使用defconfig: ${DEFCONFIG}"
           make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= $(basename ${DEFCONFIG})
-          # 关闭COMPAT_VDSO，消除CROSS_COMPILE_ARM32依赖
+          # 关闭COMPAT_VDSO，消除32位vDSO编译依赖
           sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
           make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= modules_prepare
 
-      - name: 编译SukiSU KPM模块（SUSFS已内置）
+      - name: 编译SukiSU KPM模块
         run: |
           export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
@@ -92,15 +97,12 @@ jobs:
           > anykernel.sh
           echo 'ui_print("=====================================")' >> anykernel.sh
           echo 'ui_print("  KPM Package")' >> anykernel.sh
-          echo 'ui_print("  Build Date: $BUILD_DATE")' >> anykernel.sh
-          echo 'ui_print("  SukiSU Commit: $SU_REV")' >> anykernel.sh
+          echo 'ui_print("  Build Date: '"${BUILD_DATE}"'")' >> anykernel.sh
+          echo 'ui_print("  SukiSU Commit: '"${SU_REV}"'")' >> anykernel.sh
           echo 'ui_print("  Platform: MIUI14 cannon")' >> anykernel.sh
           echo 'ui_print("=====================================")' >> anykernel.sh
           echo 'ui_print("- Loading KPM & SUSFS modules")' >> anykernel.sh
           echo 'ui_print("")' >> anykernel.sh
-
-          sed -i "1i BUILD_DATE='${BUILD_DATE}'" anykernel.sh
-          sed -i "1i SU_REV='${SU_REV}'" anykernel.sh
 
           ZIP_NAME="MIUI14_cannon_${BUILD_DATE}_${SU_REV}_KPM_AK3.zip"
           zip -r9 "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
