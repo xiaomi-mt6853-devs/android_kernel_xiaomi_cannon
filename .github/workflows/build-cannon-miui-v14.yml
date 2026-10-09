@@ -11,17 +11,17 @@ jobs:
     - uses: actions/checkout@v3
       name: 检出fork仓库源码
 
-    - name: 构建编译内核环境
+    - name: 构建编译内核环境 & 创建工作目录
       run: |
         sudo apt-get update
         sudo -E apt-get -y -qq install git make bc bison ccache openssl dos2unix zip kmod cpio flex libelf-dev curl libssl-dev wget device-tree-compiler ca-certificates python3 binutils binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi abootimg
-        mkdir -p $GITHUB_WORKSPACE/kernel_workspace
-        cp -r $GITHUB_WORKSPACE/* $GITHUB_WORKSPACE/kernel_workspace/android-kernel/
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        cp -r $GITHUB_WORKSPACE/. $GITHUB_WORKSPACE/kernel_workspace/android-kernel/
+        ls -la $GITHUB_WORKSPACE/kernel_workspace/android-kernel
 
     - name: 下载 AOSP GCC4.9 交叉编译器
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        
         mkdir gcc64
         wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-12.1.0_r27.tar.gz
         tar -C gcc64/ -zxvf gcc-aarch64.tar.gz
@@ -36,10 +36,10 @@ jobs:
         mkdir clang-aosp
         git clone -q --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-6443078 -b 10.0 clang-aosp
 
-    - name: 4.14内核打 set_memory.h 补丁（KPM必备）
+    - name: 4.14 set_memory 补丁（KPM必备）
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        curl -LSs https://raw.githubusercontent.com/qwerty27817/xiaomi_sm8250_kernel_auto_build/main/patches/4.14-set_memory-backport.patch -o set_memory.patch
+        curl -LSs https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/patches/4.14/set_memory-backport.patch -o set_memory.patch
         git apply set_memory.patch || true
         echo "==== set_memory.h 补丁应用完成 ===="
 
@@ -70,9 +70,9 @@ jobs:
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
 
-        make -s -j$(nproc --all) O=out ARCH=arm64 mt6853-ss_defconfig
+        make -s -j$(nproc --all) O=out ARCH=arm64 k6853v1_64_defconfig
 
-        # KPM必需配置，顺序不能乱
+        # KPM必需配置
         sed -i 's/# CONFIG_DEBUG_KERNEL is not set/CONFIG_DEBUG_KERNEL=y/' out/.config
         sed -i 's/CONFIG_DEBUG_KERNEL=n/CONFIG_DEBUG_KERNEL=y/' out/.config
 
@@ -89,7 +89,7 @@ jobs:
 
         make O=out ARCH=arm64 olddefconfig
 
-        # 校验配置
+        # 打印核对配置
         grep -E "CONFIG_DEBUG_KERNEL|CONFIG_MODULES|CONFIG_KALLSYMS|CONFIG_KALLSYMS_ALL" out/.config
 
         # 模块编译前置
@@ -114,7 +114,7 @@ jobs:
           exit 1
         fi
 
-    - name: 打包 new-boot.img（带版本命名）
+    - name: 打包 new-boot.img
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         cp android-kernel/boot-14.img base-boot.img
@@ -123,7 +123,7 @@ jobs:
         abootimg --create ${PROJECT_NAME}-${VERSION}.img -f bootimg.cfg -k zImage -r initrd.img
         echo "✅ ${PROJECT_NAME}-${VERSION}.img 打包完成"
 
-    - name: 制作内核AnyKernel3卡刷包（版本命名zip）
+    - name: 制作内核AnyKernel3卡刷包
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
         git clone https://github.com/osm0sis/AnyKernel3 ak
