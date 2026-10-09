@@ -1,4 +1,4 @@
-name: MIUI14.0.6 Cannon KPM+SUSFS+APK
+name: MIUI14.0.6 Cannon | DynamicName KPM+SUSFS+APK
 on:
   workflow_dispatch:
     inputs:
@@ -90,20 +90,26 @@ jobs:
           echo "BuildDate:${{ env.BUILD_DATE }}" > info_date.txt
           echo "SukiSU_Rev:${{ env.SU_REV }}" > info_rev.txt
 
-          # TWRP刷入打印信息
-          cat >> anykernel.sh <<EOF
+          # 【重点修复】先写入环境变量到anykernel.sh头部
+          echo "export CUSTOM_NAME='${{ env.CUSTOM_NAME }}'" > anykernel.sh
+          echo "export BUILD_DATE='${{ env.BUILD_DATE }}'" >> anykernel.sh
+          echo "export SU_REV='${{ env.SU_REV }}'" >> anykernel.sh
+
+          # 追加刷入界面文本
+          cat >> anykernel.sh <<'EOF'
 ui_print("=====================================")
-ui_print("  ${{ env.CUSTOM_NAME }} KPM Package")
-ui_print("  Build Date: ${{ env.BUILD_DATE }}")
-ui_print("  SukiSU Commit: ${{ env.SU_REV }}")
+ui_print("  ${CUSTOM_NAME} KPM Package")
+ui_print("  Build Date: ${BUILD_DATE}")
+ui_print("  SukiSU Commit: ${SU_REV}")
 ui_print("  Platform: MIUI14 cannon")
 ui_print("=====================================")
 ui_print("- Loading KPM & SUSFS modules")
 ui_print("- Included Manager APK")
 ui_print("")
-ui_print("- Try install ${{ env.CUSTOM_NAME }} Manager APK")
+ui_print("- Try install ${CUSTOM_NAME} Manager APK")
 pm install /tmp/manager.apk
 EOF
+
           ZIP_NAME="${{ env.CUSTOM_NAME }}_KPM_AK3_MIUI14_${{ env.BUILD_DATE }}_${{ env.SU_REV }}.zip"
           zip -r9 $GITHUB_WORKSPACE/$ZIP_NAME *
           echo "ZIP_FILE=$ZIP_NAME" >> $GITHUB_ENV
