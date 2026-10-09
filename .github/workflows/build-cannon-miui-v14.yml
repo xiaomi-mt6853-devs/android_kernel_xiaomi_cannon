@@ -16,14 +16,15 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 获取SukiSU Ultra（内置SUSFS）
+      - name: 获取SukiSU Ultra（开启KPM）
         run: |
           wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
           unzip -q sukisu.zip
           mv SukiSU-Ultra-main sukisu
 
           cd "${GITHUB_WORKSPACE}"
-          bash sukisu/kernel/setup.sh susfs-main sukisu
+          # 重点：增加 KPM=1 传给setup.sh，启用KPM
+          bash sukisu/kernel/setup.sh KPM=1 susfs-main sukisu
 
           # AnyKernel3
           wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -O ak3.zip
@@ -59,19 +60,9 @@ jobs:
       - name: 编译SukiSU KPM模块
         run: |
           cd "${GITHUB_WORKSPACE}"
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel
 
-      - name: Patch boot镜像
-        run: |
-          cd "${GITHUB_WORKSPACE}/sukisu"
-          if [ ! -f "${GITHUB_WORKSPACE}/boot-14.img" ];then
-            echo "❌ 仓库根目录缺少 boot-14.img！"
-            exit 1
-          fi
-          bash kernel/patch.sh "${GITHUB_WORKSPACE}/boot-14.img"
-          cp patched-boot.img "${GITHUB_WORKSPACE}/MIUI14_cannon_${BUILD_DATE}_${SU_REV}_boot.img"
-
-      - name: 构建AnyKernel3卡刷包
+      - name: 构建AnyKernel3 KPM卡刷包
         run: |
           cd "${GITHUB_WORKSPACE}/ak3"
           rm -rf modules
@@ -83,22 +74,21 @@ jobs:
 
           > anykernel.sh
           echo 'ui_print("=====================================")' >> anykernel.sh
-          echo 'ui_print("  KPM Package")' >> anykernel.sh
+          echo 'ui_print("  SukiSU Ultra KPM Package")' >> anykernel.sh
           echo 'ui_print("  Build Date: '"${BUILD_DATE}"'")' >> anykernel.sh
           echo 'ui_print("  SukiSU Commit: '"${SU_REV}"'")' >> anykernel.sh
-          echo 'ui_print("  Platform: MIUI14 cannon")' >> anykernel.sh
+          echo 'ui_print("  Device: Xiaomi cannon 4.14 Non-GKI")' >> anykernel.sh
           echo 'ui_print("=====================================")' >> anykernel.sh
           echo 'ui_print("- Loading KPM & SUSFS modules")' >> anykernel.sh
           echo 'ui_print("")' >> anykernel.sh
 
-          ZIP_NAME="MIUI14_cannon_${BUILD_DATE}_${SU_REV}_KPM_AK3.zip"
+          ZIP_NAME="cannon_4.14_SukiSU_KPM_${BUILD_DATE}_${SU_REV}.zip"
           zip -r9 "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
           echo "ZIP_FILE=${ZIP_NAME}" >> "${GITHUB_ENV}"
 
-      - name: 上传产物
+      - name: 上传AnyKernel3卡刷包
         uses: actions/upload-artifact@v4
         with:
-          name: MIUI14_cannon_${BUILD_DATE}_${SU_REV}
+          name: cannon_4.14_SukiSU_KPM_${BUILD_DATE}_${SU_REV}
           path: |
-            ${{ github.workspace }}/MIUI14_cannon_${BUILD_DATE}_${SU_REV}_boot.img
             ${{ github.workspace }}/${{ env.ZIP_FILE }}
