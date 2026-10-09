@@ -1,0 +1,107 @@
+name: Build Cannon Kernel + SukiSU KPM AnyKernel3(All Latest)
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Kernel & SukiSU KPM AnyKernel3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install latest build dependencies
+        run: |
+          sudo apt update -y
+          sudo apt upgrade -y
+          sudo apt install -y git curl wget build-essential libssl-dev libelf-dev bison flex python3 cpio unzip rsync bc zip
+
+      - name: Checkout cannon kernel source (latest lineage-20)
+        uses: actions/checkout@v4
+        with:
+          repository: xiaomi-mt6853-devs/android_kernel_xiaomi_cannon
+          ref: lineage-20
+          path: kernel
+          fetch-depth: 0
+
+      - name: Download Latest AOSP Clang
+        run: |
+          cd $GITHUB_WORKSPACE
+          mkdir -p clang
+          LATEST_CLANG=$(curl -s https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+/refs/heads/main?format=TEXT | base64 -d | grep -E "refs/tags/android-[0-9.]+_r[0-9]+" | tail -1 | awk '{print $2}')
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/$LATEST_CLANG/clang.tar.gz
+          tar -xf clang.tar.gz -C clang
+          echo "CLANG_BIN=$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_ENV
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+
+      - name: Enable KPM & required kernel configs
+        run: |
+          cd $GITHUB_WORKSPACE/kernel
+          make ARCH=arm64 O=out CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang cannon_defconfig
+          ./scripts/config --file out/.config \
+          -e CONFIG_KPM \
+          -e CONFIG_KALLSYMS \
+          -e CONFIG_KALLSYMS_ALL \
+          -e CONFIG_MODULES \
+          -e CONFIG_MODULE_UNLOAD \
+          -e CONFIG_KPROBES \
+          -e CONFIG_KPROBE_EVENTS \
+          -e CONFIG_FTRACE \
+          -e CONFIG_DEBUG_FS \
+          -e CONFIG_DEBUG_INFO
+          make ARCH=arm64 O=out CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang olddefconfig
+
+      - name: Compile cannon kernel
+        run: |
+          cd $GITHUB_WORKSPACE/kernel
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          make ARCH=arm64 O=out CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang -j$(nproc)
+
+      - name: Pull latest SukiSU-Ultra & SUSFS source
+        run: |
+          cd $GITHUB_WORKSPACE
+          git clone --depth=1 https://github.com/SukiSU-Ultra/SukiSU-Ultra.git sukisu
+          git clone --depth=1 https://github.com/SukiSU-Ultra/SUSFS.git susfs
+
+      - name: Build SukiSU KPM LKM module
+        run: |
+          cd $GITHUB_WORKSPACE/kernel/out
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang M=$GITHUB_WORKSPACE/sukisu/kernel modules
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=${{ env.CLANG_BIN }}/clang M=$GITHUB_WORKSPACE/susfs modules
+
+      - name: Clone latest AnyKernel3 template
+        run: |
+          cd $GITHUB_WORKSPACE
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git ak3
+          # 清空ak3默认内核，准备放入KPM模块
+          rm -rf $GITHUB_WORKSPACE/ak3/Image $GITHUB_WORKSPACE/ak3/modules
+
+      - name: Copy compiled KPM modules into AnyKernel3
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/ak3/modules
+          cp $GITHUB_WORKSPACE/sukisu/kernel/*.ko $GITHUB_WORKSPACE/ak3/modules/
+          cp $GITHUB_WORKSPACE/susfs/*.ko $GITHUB_WORKSPACE/ak3/modules/
+
+      - name: Package AnyKernel3 → SukiSU-KPM-AK3.zip
+        run: |
+          cd $GITHUB_WORKSPACE/ak3
+          zip -r9 $GITHUB_WORKSPACE/SukiSU-KPM-AK3.zip *
+
+      - name: Build boot.img
+        run: |
+          cd $GITHUB_WORKSPACE
+          git clone https://github.com/osm0sis/mkbootimg.git mkboot
+          cd mkboot && make
+          $GITHUB_WORKSPACE/mkboot/mkbootimg \
+          --kernel $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image.lz4-dtb \
+          --ramdisk /dev/null \
+          --base 0x40000000 \
+          --pagesize 4096 \
+          --header_version 2 \
+          -o boot.img
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cannon-kpm-full-package
+          path: |
+            boot.img
+            SukiSU-KPM-AK3.zip
