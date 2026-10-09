@@ -1,4 +1,4 @@
-name: Build SukiSU KPM Cannon LinaroGCC11
+name: Build SukiSU KPM Cannon
 on:
   workflow_dispatch:
 
@@ -6,19 +6,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装基础依赖
+      - name: 安装基础依赖 + aarch64交叉gcc
         run: |
           sudo apt update -y
-          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
-
-      - name: 下载 Linaro GCC 11 aarch64 交叉编译器
-        run: |
-          mkdir -p toolchain
-          cd toolchain
-          wget --retry-connrefused --waitretry=2 --tries=5 https://releases.linaro.org/components/toolchain/binaries/11.3-2022.06/aarch64-linux-gnu/gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu.tar.xz
-          tar -xf gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu.tar.xz
-          echo "TOOLCHAIN=${GITHUB_WORKSPACE}/toolchain/gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu/bin" >> "${GITHUB_ENV}"
-          echo "PATH=${GITHUB_WORKSPACE}/toolchain/gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu/bin:${PATH}" >> "${GITHUB_ENV}"
+          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: 拉取cannon内核源码
         uses: actions/checkout@v4
@@ -48,9 +39,12 @@ jobs:
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
 
-      - name: 加载defconfig & modules_prepare（Linaro GCC11）
+      - name: 打印编译器版本校验
         run: |
-          export PATH="${TOOLCHAIN}:${PATH}"
+          aarch64-linux-gnu-gcc --version
+
+      - name: 加载defconfig & modules_prepare
+        run: |
           cd "${GITHUB_WORKSPACE}"
           DEFCONFIG=$(ls arch/arm64/configs/*cannon*defconfig | head -n1)
           if [ -z "${DEFCONFIG}" ];then
@@ -64,7 +58,6 @@ jobs:
 
       - name: 编译SukiSU KPM模块
         run: |
-          export PATH="${TOOLCHAIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
 
