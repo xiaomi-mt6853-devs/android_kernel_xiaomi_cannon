@@ -16,17 +16,16 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 下载源码包（wget，避开git clone网络bug）
+      - name: 获取SukiSU Ultra（内置SUSFS，官方脚本）
         run: |
-          # SukiSU-Ultra
           wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SukiSU-Ultra/archive/refs/heads/main.zip -O sukisu.zip
           unzip -q sukisu.zip
           mv SukiSU-Ultra-main sukisu
 
-          # SUSFS
-          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/SukiSU-Ultra/SUSFS/archive/refs/heads/main.zip -O susfs.zip
-          unzip -q susfs.zip
-          mv SUSFS-main susfs
+          # 官方一键脚本集成SUSFS，susfs-main分支
+          cd sukisu
+          bash kernel/setup.sh susfs-main
+          cd ..
 
           # AnyKernel3
           wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -O ak3.zip
@@ -65,12 +64,11 @@ jobs:
           make ARCH=arm64 CC=clang $(basename ${DEFCONFIG})
           make ARCH=arm64 CC=clang modules_prepare
 
-      - name: 编译SukiSU KPM + SUSFS LKM模块
+      - name: 编译SukiSU KPM模块（SUSFS已内置）
         run: |
           export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
           make ARCH=arm64 CC=clang M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
-          make ARCH=arm64 CC=clang M=${GITHUB_WORKSPACE}/susfs
 
       - name: Patch boot镜像
         run: |
@@ -88,7 +86,6 @@ jobs:
           rm -rf modules
           mkdir -p modules
           cp "${GITHUB_WORKSPACE}/sukisu/kernel"/*.ko modules/
-          cp "${GITHUB_WORKSPACE}/susfs"/*.ko modules/
 
           echo "BuildDate:${BUILD_DATE}" > info_date.txt
           echo "SukiSU_Rev:${SU_REV}" > info_rev.txt
