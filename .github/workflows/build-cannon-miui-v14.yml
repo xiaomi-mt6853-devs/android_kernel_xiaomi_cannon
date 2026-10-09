@@ -22,10 +22,9 @@ jobs:
           unzip -q sukisu.zip
           mv SukiSU-Ultra-main sukisu
 
-          # 官方一键脚本集成SUSFS，susfs-main分支
-          cd sukisu
-          bash kernel/setup.sh susfs-main
-          cd ..
+          # 在内核根目录执行setup.sh，这是关键修复！
+          cd "${GITHUB_WORKSPACE}"
+          bash sukisu/kernel/setup.sh susfs-main sukisu
 
           # AnyKernel3
           wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/osm0sis/AnyKernel3/archive/refs/heads/master.zip -O ak3.zip
