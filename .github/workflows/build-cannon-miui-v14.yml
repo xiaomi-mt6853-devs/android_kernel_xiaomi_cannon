@@ -1,4 +1,4 @@
-name: Build SukiSU KPM Cannon GCC
+name: Build SukiSU KPM Cannon LinaroGCC11
 on:
   workflow_dispatch:
 
@@ -6,12 +6,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖 + aarch64 GCC交叉编译器
+      - name: 安装基础依赖
         run: |
           sudo apt update -y
           sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
-          # 安装arm64交叉GCC（关键！）
-          sudo apt install -y aarch64-linux-gnu-gcc aarch64-linux-gnu-binutils
+
+      - name: 下载 Linaro GCC 11 aarch64 交叉编译器
+        run: |
+          mkdir -p toolchain
+          cd toolchain
+          wget --retry-connrefused --waitretry=2 --tries=5 https://releases.linaro.org/components/toolchain/binaries/11.3-2022.06/aarch64-linux-gnu/gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu.tar.xz
+          tar -xf gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu.tar.xz
+          echo "TOOLCHAIN=${GITHUB_WORKSPACE}/toolchain/gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu/bin" >> "${GITHUB_ENV}"
+          echo "PATH=${GITHUB_WORKSPACE}/toolchain/gcc-linaro-11.3.1-2022.06-x86_64_aarch64-linux-gnu/bin:${PATH}" >> "${GITHUB_ENV}"
 
       - name: 拉取cannon内核源码
         uses: actions/checkout@v4
@@ -41,8 +48,9 @@ jobs:
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
 
-      - name: 加载defconfig & modules_prepare（GCC编译）
+      - name: 加载defconfig & modules_prepare（Linaro GCC11）
         run: |
+          export PATH="${TOOLCHAIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
           DEFCONFIG=$(ls arch/arm64/configs/*cannon*defconfig | head -n1)
           if [ -z "${DEFCONFIG}" ];then
@@ -50,14 +58,13 @@ jobs:
             exit 1
           fi
           echo "✅ 使用defconfig: ${DEFCONFIG}"
-          # GCC参数，不要LLVM
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- $(basename ${DEFCONFIG})
-          # 关闭COMPAT_VDSO，消除32位vDSO依赖
           sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
 
       - name: 编译SukiSU KPM模块
         run: |
+          export PATH="${TOOLCHAIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
 
