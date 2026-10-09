@@ -40,10 +40,10 @@ jobs:
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
 
-      - name: 下载 ZyCromerZ Clang 18（稳定可用，cannon推荐）
+      - name: 下载 ZyCromerZ Clang 14（适配cannon老内核）
         run: |
           mkdir -p clang
-          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/ZyCromerZ/Clang/releases/download/18.0.0-20230728-release/Clang-18.0.0-20230728.tar.gz -O clang.tar.gz
+          wget --retry-connrefused --waitretry=1 --tries=3 https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20220825-release/Clang-14.0.6-20220825.tar.gz -O clang.tar.gz
           tar -xf clang.tar.gz -C clang
           echo "CLANG_BIN=${GITHUB_WORKSPACE}/clang/bin" >> "${GITHUB_ENV}"
           echo "PATH=${GITHUB_WORKSPACE}/clang/bin:${PATH}" >> "${GITHUB_ENV}"
@@ -58,16 +58,16 @@ jobs:
             exit 1
           fi
           echo "✅ 使用defconfig: ${DEFCONFIG}"
-          make ARCH=arm64 CC=clang $(basename ${DEFCONFIG})
-          # 关闭COMPAT_VDSO，解决CROSS_COMPILE_ARM32缺失报错
+          make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= $(basename ${DEFCONFIG})
+          # 关闭COMPAT_VDSO，消除CROSS_COMPILE_ARM32依赖
           sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
-          make ARCH=arm64 CC=clang modules_prepare
+          make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= modules_prepare
 
       - name: 编译SukiSU KPM模块（SUSFS已内置）
         run: |
           export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
-          make ARCH=arm64 CC=clang M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
+          make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
 
       - name: Patch boot镜像
         run: |
