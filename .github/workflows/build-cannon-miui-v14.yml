@@ -4,19 +4,15 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
-      - name: 安装基础依赖
+      - name: 安装基础依赖 + gcc8交叉编译器
         run: |
           sudo apt update -y
           sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
-
-      - name: 下载 Linaro GCC 8.3 AArch64 交叉编译器
-        run: |
-          wget https://releases.linaro.org/components/toolchain/binaries/8.3-2019.03/aarch64-linux-gnu/gcc-linaro-8.3-2019.03-x86_64_aarch64-linux-gnu.tar.xz
-          tar -xf gcc-linaro-8.3-2019.03-x86_64_aarch64-linux-gnu.tar.xz
-          echo "${GITHUB_WORKSPACE}/gcc-linaro-8.3-2019.03-x86_64_aarch64-linux-gnu/bin" >> $GITHUB_PATH
+          sudo apt install -y gcc-8-aarch64-linux-gnu g++-8-aarch64-linux-gnu
           export CROSS_COMPILE=aarch64-linux-gnu-
+          export CC=aarch64-linux-gnu-gcc-8
 
       - name: 拉取cannon内核源码
         uses: actions/checkout@v4
@@ -48,7 +44,7 @@ jobs:
 
       - name: 打印编译器版本
         run: |
-          aarch64-linux-gnu-gcc --version
+          aarch64-linux-gnu-gcc-8 --version
 
       - name: 加载defconfig，开启模块支持，modules_prepare
         run: |
@@ -59,22 +55,22 @@ jobs:
             exit 1
           fi
           echo "✅ 使用defconfig: ${DEFCONFIG}"
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- $(basename ${DEFCONFIG})
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 $(basename ${DEFCONFIG})
           # 开启模块，关闭VDSO
           sed -i 's/# CONFIG_MODULES is not set/CONFIG_MODULES=y/' .config
           sed -i 's/CONFIG_MODULES=n/CONFIG_MODULES=y/' .config
           sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 olddefconfig
           grep CONFIG_MODULES .config
           # 只做modules_prepare，不编译全部内核模块
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 modules_prepare
 
       - name: 编译SukiSU KPM模块
         run: |
           cd "${GITHUB_WORKSPACE}"
           echo "===== 编译前 sukisu/kernel 文件列表 ====="
           ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel modules
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc-8 M=${GITHUB_WORKSPACE}/sukisu/kernel modules
           echo "===== 编译后 sukisu/kernel 文件列表 ====="
           ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"
           ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"*.ko 2>/dev/null || echo "❌ 没有找到ko文件"
