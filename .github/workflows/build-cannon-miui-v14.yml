@@ -1,4 +1,4 @@
-name: MIUI14.0.6 Cannon | Patch boot-14.img + Build SukiSU KPM AnyKernel3
+name: MIUI14.0.6 Cannon | AutoExtractBoot + Patch + Build SukiSU KPM AnyKernel3
 on:
   workflow_dispatch
 
@@ -10,12 +10,20 @@ jobs:
         run: |
           sudo apt update -y
           sudo apt upgrade -y
-          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync
+          sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils
 
-      - name: Checkout repo（仓库根目录存放 boot-14.img）
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Download OFFICIAL MIUI14.0.6 cannon fastboot rom
+        run: |
+          cd $GITHUB_WORKSPACE
+          # cannon V14.0.6.0.SJECNXM 官方包
+          wget -q https://bigota.d.miui.com/V14.0.6.0.SJECNXM/cannon_images_V14.0.6.0.SJECNXM_20231017.0000.00_12.0_cn_ce9fc0ac48.tgz -O miui14-cannon.tgz
+          tar -xf miui14-cannon.tgz
+          cp cannon_images_V14.0.6.0.SJECNXM_20231017.0000.00_12.0_cn_ce9fc0ac48/boot.img boot-14.img
 
       - name: Pull latest SukiSU-Ultra & SUSFS & AnyKernel3
         run: |
@@ -35,7 +43,6 @@ jobs:
       - name: Patch boot-14.img，开启KPM
         run: |
           cd $GITHUB_WORKSPACE/sukisu
-          # 传入你仓库里的 boot-14.img 进行补丁
           bash kernel/patch.sh $GITHUB_WORKSPACE/boot-14.img
           cp patched-boot.img $GITHUB_WORKSPACE/boot-kpm-sukisu-miui14.img
 
