@@ -14,7 +14,7 @@ jobs:
     - name: 构建编译内核环境
       run: |
         sudo apt-get update
-        sudo -E apt-get -y -qq install git make bc bison ccache openssl dos2unix zip kmod cpio flex libelf-dev curl libssl-dev wget device-tree-compiler ca-certificates python3 python2 binutils binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi abootimg
+        sudo -E apt-get -y -qq install git make bc bison ccache openssl dos2unix zip kmod cpio flex libelf-dev curl libssl-dev wget device-tree-compiler ca-certificates python3 binutils binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi abootimg
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
         cp -r $GITHUB_WORKSPACE/* $GITHUB_WORKSPACE/kernel_workspace/android-kernel/
 
@@ -59,6 +59,11 @@ jobs:
       with:
         key: build-cannon-mt6853-full-kernel-sukisu-kpm
         max-size: 2G
+
+    - name: 清理旧out输出目录
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        rm -rf out
 
     - name: 加载defconfig，开启KPM内核配置
       run: |
@@ -131,7 +136,6 @@ jobs:
         zip -r ../${PROJECT_NAME}-${VERSION}.zip .
         cd ..
 
-    # ========== 修改点：升级到 upload-artifact@v4，分两次上传 ==========
     - name: 上传 new-boot.img
       uses: actions/upload-artifact@v4
       with:
