@@ -1,4 +1,4 @@
-name: Build SukiSU KPM Cannon
+name: Build SukiSU KPM Cannon 4.14.186
 on:
   workflow_dispatch:
 
@@ -23,7 +23,6 @@ jobs:
           mv SukiSU-Ultra-main sukisu
 
           cd "${GITHUB_WORKSPACE}"
-          # 重点：增加 KPM=1 传给setup.sh，启用KPM
           bash sukisu/kernel/setup.sh KPM=1 susfs-main sukisu
 
           # AnyKernel3
@@ -44,7 +43,7 @@ jobs:
         run: |
           aarch64-linux-gnu-gcc --version
 
-      - name: 加载defconfig & modules_prepare
+      - name: 加载defconfig，强制开启模块支持
         run: |
           cd "${GITHUB_WORKSPACE}"
           DEFCONFIG=$(ls arch/arm64/configs/*cannon*defconfig | head -n1)
@@ -54,20 +53,39 @@ jobs:
           fi
           echo "✅ 使用defconfig: ${DEFCONFIG}"
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- $(basename ${DEFCONFIG})
+          # 强制开启模块，关闭COMPAT_VDSO
+          sed -i 's/# CONFIG_MODULES is not set/CONFIG_MODULES=y/' .config
+          sed -i 's/CONFIG_MODULES=n/CONFIG_MODULES=y/' .config
           sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
+          # 重新生成配置
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+          # 检查模块开关
+          grep CONFIG_MODULES .config
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
 
-      - name: 编译SukiSU KPM模块
+      - name: 编译SukiSU KPM模块 + 调试目录查看
         run: |
           cd "${GITHUB_WORKSPACE}"
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel
+          echo "===== 编译前 sukisu/kernel 文件列表 ====="
+          ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel modules
+          echo "===== 编译后 sukisu/kernel 文件列表 ====="
+          ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"
+          ls -la "${GITHUB_WORKSPACE}/sukisu/kernel/"*.ko 2>/dev/null || echo "❌ 没有找到ko文件"
 
       - name: 构建AnyKernel3 KPM卡刷包
         run: |
           cd "${GITHUB_WORKSPACE}/ak3"
           rm -rf modules
           mkdir -p modules
-          cp "${GITHUB_WORKSPACE}/sukisu/kernel"/*.ko modules/
+          KO_PATH="${GITHUB_WORKSPACE}/sukisu/kernel/"
+          KO_FILES=$(ls ${KO_PATH}*.ko 2>/dev/null || true)
+          if [ -z "${KO_FILES}" ];then
+            echo "❌ 没有找到ko模块文件！停止打包"
+            exit 1
+          fi
+          cp ${KO_PATH}*.ko modules/
 
           echo "BuildDate:${BUILD_DATE}" > info_date.txt
           echo "SukiSU_Rev:${SU_REV}" > info_rev.txt
@@ -77,18 +95,18 @@ jobs:
           echo 'ui_print("  SukiSU Ultra KPM Package")' >> anykernel.sh
           echo 'ui_print("  Build Date: '"${BUILD_DATE}"'")' >> anykernel.sh
           echo 'ui_print("  SukiSU Commit: '"${SU_REV}"'")' >> anykernel.sh
-          echo 'ui_print("  Device: Xiaomi cannon 4.14 Non-GKI")' >> anykernel.sh
+          echo 'ui_print("  Device: Xiaomi cannon 4.14.186 Non-GKI")' >> anykernel.sh
           echo 'ui_print("=====================================")' >> anykernel.sh
           echo 'ui_print("- Loading KPM & SUSFS modules")' >> anykernel.sh
           echo 'ui_print("")' >> anykernel.sh
 
-          ZIP_NAME="cannon_4.14_SukiSU_KPM_${BUILD_DATE}_${SU_REV}.zip"
+          ZIP_NAME="cannon_4.14.186_SukiSU_KPM_${BUILD_DATE}_${SU_REV}.zip"
           zip -r9 "${GITHUB_WORKSPACE}/${ZIP_NAME}" .
           echo "ZIP_FILE=${ZIP_NAME}" >> "${GITHUB_ENV}"
 
       - name: 上传AnyKernel3卡刷包
         uses: actions/upload-artifact@v4
         with:
-          name: cannon_4.14_SukiSU_KPM_${BUILD_DATE}_${SU_REV}
+          name: cannon_4.14.186_SukiSU_KPM_${BUILD_DATE}_${SU_REV}
           path: |
             ${{ github.workspace }}/${{ env.ZIP_FILE }}
