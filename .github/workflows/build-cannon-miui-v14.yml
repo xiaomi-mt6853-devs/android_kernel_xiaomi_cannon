@@ -1,4 +1,4 @@
-name: Build SukiSU KPM Cannon
+name: Build SukiSU KPM Cannon GCC
 on:
   workflow_dispatch:
 
@@ -6,10 +6,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖包
+      - name: 安装依赖 + aarch64 GCC交叉编译器
         run: |
           sudo apt update -y
           sudo apt install -y git curl wget unzip zip bison flex bc libssl-dev libelf-dev python3 cpio rsync tar xz-utils jq
+          # 安装arm64交叉GCC（关键！）
+          sudo apt install -y aarch64-linux-gnu-gcc aarch64-linux-gnu-binutils
 
       - name: 拉取cannon内核源码
         uses: actions/checkout@v4
@@ -39,23 +41,8 @@ jobs:
           echo "SU_REV=${SU_REV}" >> "${GITHUB_ENV}"
           echo "BUILD_DATE=${BUILD_DATE}" >> "${GITHUB_ENV}"
 
-      - name: 下载 ZyCromerZ Clang14.0.6（有效release）
+      - name: 加载defconfig & modules_prepare（GCC编译）
         run: |
-          mkdir -p clang
-          wget --retry-connrefused --waitretry=2 --tries=5 https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20250704-release/Clang-14.0.6-20250704.tar.gz -O clang.tar.gz
-          # 校验下载是否成功
-          if [ ! -f clang.tar.gz ]; then
-            echo "Clang压缩包下载失败"
-            exit 1
-          fi
-          tar -xf clang.tar.gz -C clang
-          echo "CLANG_BIN=${GITHUB_WORKSPACE}/clang/bin" >> "${GITHUB_ENV}"
-          echo "PATH=${GITHUB_WORKSPACE}/clang/bin:${PATH}" >> "${GITHUB_ENV}"
-          clang --version
-
-      - name: 加载defconfig & modules_prepare
-        run: |
-          export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
           DEFCONFIG=$(ls arch/arm64/configs/*cannon*defconfig | head -n1)
           if [ -z "${DEFCONFIG}" ];then
@@ -63,16 +50,16 @@ jobs:
             exit 1
           fi
           echo "✅ 使用defconfig: ${DEFCONFIG}"
-          make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= $(basename ${DEFCONFIG})
-          # 关闭COMPAT_VDSO，消除32位vDSO编译依赖
+          # GCC参数，不要LLVM
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- $(basename ${DEFCONFIG})
+          # 关闭COMPAT_VDSO，消除32位vDSO依赖
           sed -i 's/CONFIG_COMPAT_VDSO=y/CONFIG_COMPAT_VDSO=n/' .config
-          make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= modules_prepare
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
 
       - name: 编译SukiSU KPM模块
         run: |
-          export PATH="${CLANG_BIN}:${PATH}"
           cd "${GITHUB_WORKSPACE}"
-          make ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE= M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- M=${GITHUB_WORKSPACE}/sukisu/kernel KPM=1
 
       - name: Patch boot镜像
         run: |
