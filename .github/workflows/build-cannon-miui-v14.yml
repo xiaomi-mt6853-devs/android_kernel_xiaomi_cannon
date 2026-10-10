@@ -133,9 +133,10 @@ jobs:
           local root="$1" tp="$2"
           root="$(cd "$root" && pwd)"
           local sbin="$root/synth-bin"
+          rm -rf "$sbin"
           mkdir -p "$sbin"
           local REAL P t
-          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
           [ -z "$REAL" ] && REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -d' ' -f2-) || true
           if [ -z "$REAL" ]; then
             echo "❌ $tp: 未找到真实 gcc 驱动，$root 实际布局："; find "$root" -maxdepth 3 | head -30
@@ -143,8 +144,8 @@ jobs:
           fi
           ln -sf "$REAL" "$sbin/$tp-gcc"
           for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
-            P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
-            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | head -1)
+            P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path "*/synth-bin/*" 2>/dev/null | head -1)
             if [ -n "$P" ]; then ln -sf "$P" "$sbin/$tp-$t"; fi || true
           done
           [ -e "$sbin/$tp-ld" ] || ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" 2>/dev/null || true
@@ -155,8 +156,8 @@ jobs:
         G64_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc64/synth-bin
         G32_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc32/synth-bin
         export PATH="$G64_SBIN:$G32_SBIN:$PATH"
-        export CROSS_COMPILE="$G64_SBIN/"
-        export CROSS_COMPILE_ARM32="$G32_SBIN/"
+        export CROSS_COMPILE="$G64_SBIN/aarch64-linux-android-"
+        export CROSS_COMPILE_ARM32="$G32_SBIN/arm-linux-androideabi-"
         export CC="$G64_SBIN/aarch64-linux-android-gcc"
         echo "== 工具链检查 =="
         "$CC" --version | head -1
@@ -222,9 +223,10 @@ jobs:
           local root="$1" tp="$2"
           root="$(cd "$root" && pwd)"
           local sbin="$root/synth-bin"
+          rm -rf "$sbin"
           mkdir -p "$sbin"
           local REAL P t
-          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
           [ -z "$REAL" ] && REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -d' ' -f2-) || true
           if [ -z "$REAL" ]; then
             echo "❌ $tp: 未找到真实 gcc 驱动，$root 实际布局："; find "$root" -maxdepth 3 | head -30
@@ -232,8 +234,8 @@ jobs:
           fi
           ln -sf "$REAL" "$sbin/$tp-gcc"
           for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
-            P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
-            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | head -1)
+            P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path "*/synth-bin/*" 2>/dev/null | head -1)
             if [ -n "$P" ]; then ln -sf "$P" "$sbin/$tp-$t"; fi || true
           done
           [ -e "$sbin/$tp-ld" ] || ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" 2>/dev/null || true
@@ -244,8 +246,8 @@ jobs:
         G64_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc64/synth-bin
         G32_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc32/synth-bin
         export PATH="$G64_SBIN:$G32_SBIN:$PATH"
-        export CROSS_COMPILE="$G64_SBIN/"
-        export CROSS_COMPILE_ARM32="$G32_SBIN/"
+        export CROSS_COMPILE="$G64_SBIN/aarch64-linux-android-"
+        export CROSS_COMPILE_ARM32="$G32_SBIN/arm-linux-androideabi-"
         export CC="$G64_SBIN/aarch64-linux-android-gcc"
 
         echo "==== 编译环境诊断 ===="
