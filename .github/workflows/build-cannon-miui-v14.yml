@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 env:
   PROJECT_NAME: Cannon-BakaSU-SUSFS-Kernel
-  VERSION: V1.2
+  VERSION: V1.3
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,22 +14,28 @@ jobs:
     - name: 构建编译内核环境 & 创建工作目录
       run: |
         sudo apt-get update
-        sudo -E apt-get -y -qq install git make bc bison ccache openssl dos2unix zip unzip kmod cpio flex libelf-dev curl libssl-dev wget device-tree-compiler ca-certificates python3 binutils binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi abootimg
+        sudo -E apt-get -y -qq install git make bc bison ccache openssl dos2unix zip unzip kmod cpio flex libelf-dev curl libssl-dev wget device-tree-compiler ca-certificates python3 binutils binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu xz-utils abootimg
+        sudo -E apt-get -y -qq install libtinfo5 libncurses5 || true
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
 
-    - name: 下载 AOSP GCC4.9 交叉编译器
+    - name: 下载 clang 11.0.1 工具链（LLVM 官方 release）
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        # googlesource android-12.1.0_r27 的 gcc4.9 tar 包不含 gcc 驱动（bin/ 只有 gcc-ar/nm/ranlib
-        # 三个 binutils 包装器，无法编译内核），改用 LineageOS 镜像（=Android 12 上游同一份 prebuilt，
-        # 含 real-<triple>-gcc 真 ELF 驱动），GitHub codeload 在 CI 与本机均可达。
-        mkdir gcc64
-        wget -O gcc-aarch64.tar.gz https://codeload.github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9/tar.gz/refs/heads/lineage-19.1
-        tar -C gcc64/ --strip-components=1 -zxf gcc-aarch64.tar.gz
-
-        mkdir gcc32
-        wget -O gcc-arm.tar.gz https://codeload.github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9/tar.gz/refs/heads/lineage-19.1
-        tar -C gcc32/ --strip-components=1 -zxf gcc-arm.tar.gz
+        # 原厂内核 banner: "Android (6443078 based on r383902) clang version 11.0.1"。
+        # 采用 LLVM 官方 11.0.1 release（版本号与原厂一致；基于 ubuntu-20.10 构建，
+        # 依赖 libtinfo.so.6，可在 ubuntu-latest 直接运行）。原厂用的 AOSP 镜像多为
+        # 第三方 fork（bin/clang 被换成 Go 包装器、ld.lld 仅 3 字节），故不走镜像。
+        mkdir clang
+        wget -O clang.tar.xz "https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.1/clang%2Bllvm-11.0.1-x86_64-linux-gnu-ubuntu-20.10.tar.xz"
+        tar -C clang/ --strip-components=1 -xJf clang.tar.xz
+        rm -f clang.tar.xz
+        test -x clang/bin/clang || { echo "❌ clang 未解出"; ls -l clang; exit 1; }
+        if ! clang/bin/clang --version >/dev/null 2>&1; then
+          echo "❌ clang 无法运行"; ldd clang/bin/clang || true; exit 1
+        fi
+        clang/bin/clang --version | head -1
+        clang/bin/clang --version | grep -q "clang version 11.0.1" || { echo "❌ clang 版本非 11.0.1"; exit 1; }
+        echo "✅ clang 11.0.1 就绪"
 
     - name: 集成 BakaSU（KernelSU分支，内置 su）
       run: |
@@ -118,66 +124,39 @@ jobs:
         cd $GITHUB_WORKSPACE
         rm -rf out
 
-    - name: 加载defconfig，开启 BakaSU + SUSFS 配置
+    - name: 以原厂 stock .config 为基底，开启 BakaSU + SUSFS 配置
       run: |
         cd $GITHUB_WORKSPACE
-        # ---- 定位 AOSP GCC4.9 真实工具 ----
-        # gcc 驱动选择：优先 canonical 名称（real-<tp>-gcc / <tp>-gcc / <tp>-gcc-4.9*）取体积最大者
-        # —— 即真正的 ELF 驱动，避开仅 1733B 的 python2 wrapper（runner 不一定有 /usr/bin/python）。
-        # 名称都没命中（未知布局）时，再扫描所有可执行文件用 --version 精确识别（含 "(GCC)" 才算）。
-        # binutils 取 canonical 名（$t 或 <tp>-$t）体积最大者，合成到 synth-bin/（与 lib/libexec 同级）。
-        GCC64_ROOT="$(cd kernel_workspace/gcc64 && pwd)"
-        GCC32_ROOT="$(cd kernel_workspace/gcc32 && pwd)"
-        pick_gcc_driver() {
-          local root="$1" tp="$2"
-          { find -L "$root" -type f -perm -111 -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' \
-                \( -name "real-$tp-gcc" -o -name "$tp-gcc" -o -name "$tp-gcc-4.9*" \) 2>/dev/null
-            find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null \
-              | while read -r f; do printf '%s' "$( "$f" --version 2>&1 | head -1 )" | grep -Eq '\(GCC\)|gcc version' && echo "$f"; done
-          } | sort -u | while read -r f; do printf '%s\t%s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -f2-
-        }
-        GCC64_CC="$(pick_gcc_driver "$GCC64_ROOT" aarch64-linux-android)"
-        GCC32_CC="$(pick_gcc_driver "$GCC32_ROOT" arm-linux-androideabi)"
-        if [ ! -x "$GCC64_CC" ]; then
-          echo "❌ gcc64 未找到 gcc 驱动，候选可执行文件 --version 一览："
-          find -L "$GCC64_ROOT" -type f -perm -111 -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '    %s -> %s\n' "$f" "$( "$f" --version 2>&1 | head -1 )"; done
-          exit 1
-        fi
-        if [ ! -x "$GCC32_CC" ]; then echo "❌ gcc32 未找到 gcc 驱动"; exit 1; fi
-        mk_toolchain_synth() {
-          local root="$1" tp="$2"
-          root="$(cd "$root" && pwd)"
-          local sbin="$root/synth-bin"
-          rm -rf "$sbin"
-          mkdir -p "$sbin"
-          local P t
-          for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
-            P=$(find -L "$root" -type f -perm -111 -not -path '*/synth-bin/*' \( -name "$t" -o -name "$tp-$t" \) 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
-            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -not -path '*/synth-bin/*' \( -name "$t" -o -name "$tp-$t" \) 2>/dev/null | head -1)
-            [ -n "$P" ] && ln -sf "$P" "$sbin/$tp-$t" || true
-          done
-          [ -e "$sbin/$tp-ld.bfd" ] && ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" || true
-          echo "== $tp binutils =="; ls -l "$sbin"
-        }
-        mk_toolchain_synth "$GCC64_ROOT" aarch64-linux-android || exit 1
-        mk_toolchain_synth "$GCC32_ROOT" arm-linux-androideabi || exit 1
-        G64_SBIN=$GCC64_ROOT/synth-bin
-        G32_SBIN=$GCC32_ROOT/synth-bin
-        # 真 ELF 驱动以 canonical 名放进 synth-bin（与 lib/libexec 同级，gcc 依 argv0 前缀可定位 cc1/libgcc）
-        ln -sf "$GCC64_CC" "$G64_SBIN/aarch64-linux-android-gcc"
-        ln -sf "$GCC32_CC" "$G32_SBIN/arm-linux-androideabi-gcc"
-        export PATH="$G64_SBIN:$G32_SBIN:$PATH"
-        export CROSS_COMPILE="$G64_SBIN/aarch64-linux-android-"
-        export CROSS_COMPILE_ARM32="$G32_SBIN/arm-linux-androideabi-"
-        export CC="$G64_SBIN/aarch64-linux-android-gcc"
+        # 原厂同款版本：clang 11.0.1（LLVM 官方 release）。CC 走 clang（integrated-as 编 .S），
+        # LD/AR/OBJCOPY/NM/... 走 $(CROSS_COMPILE) 的 aarch64-linux-gnu-*（apt binutils，bfd ld）。
+        CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang"
+        export PATH="$CLANG_DIR/bin:$PATH"
+        export CC="$CLANG_DIR/bin/clang"
+        export CROSS_COMPILE="aarch64-linux-gnu-"
+        export CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+        export CLANG_TRIPLE="aarch64-linux-gnu-"
         echo "== 工具链检查 =="
         "$CC" --version | head -1
-        command -v aarch64-linux-android-as aarch64-linux-android-ld aarch64-linux-android-ar arm-linux-androideabi-as || true
+        command -v aarch64-linux-gnu-ld aarch64-linux-gnu-ar aarch64-linux-gnu-objcopy aarch64-linux-gnu-elfedit || true
 
-        # 注意：必须用 cannon_defconfig（该机型专用配置），它内置 AW87519/AW87359 音频功放、
-        # REGULATOR_PM8008(camera_power)、NFC pn553/p73、ov02b10 摄像头 OTP 等项目驱动。
-        # 之前误用通用 k6853v1_64_defconfig 导致 vmlinux 链接期这些符号 undefined symbol。
-        make -s -j$(nproc --all) O=out ARCH=arm64 cannon_defconfig
+        rm -rf out && mkdir -p out
+        # 从原版 boot-14.img 的内核里抽出原厂完整 .config（IKCONFIG 内嵌）作为构建基底：
+        # 保证 MODVERSIONS/PREEMPT/各 MTK 选项与 stock 完全一致。此前用 cannon_defconfig
+        # (LOCALVERSION="-perf-cus"、未开 MODVERSIONS) 重编，UTS/vermagic 与 stock 模块不符，
+        # 极可能是卡 logo 的主因。
+        python3 - <<'EOF'
+        import struct, gzip
+        d = open('boot-14.img', 'rb').read()
+        page = struct.unpack('<I', d[36:40])[0]
+        ksz  = struct.unpack('<I', d[8:12])[0]
+        raw  = gzip.decompress(d[page:page + ksz])
+        i = raw.find(b'IKCFG_ST'); j = raw.find(b'IKCFG_ED', i)
+        assert i > 0 and j > i, 'stock 内核未内嵌 config（IKCONFIG）'
+        cfg = gzip.decompress(raw[i + 8:j])
+        open('out/.config', 'wb').write(cfg)
+        print('[stock .config] bytes =', len(cfg))
+        EOF
+        grep -q '^CONFIG_MODVERSIONS=y' out/.config || { echo "❌ stock config 缺 MODVERSIONS"; exit 1; }
 
         # BakaSU 必需配置（CONFIG_KSU 来自集成后的 drivers/kernelsu/Kconfig）
         scripts/config --file out/.config -e DEBUG_KERNEL
@@ -200,10 +179,16 @@ jobs:
         scripts/config --file out/.config -e KSU_SUSFS_SUS_MAP
         scripts/config --file out/.config -d COMPAT_VDSO
 
-        # 关键：cannon_defconfig 缺失 MTK 追加 DTB 配置（其它 k6853 各 defconfig 均有）。
-        # 不开会导致产出的 Image.gz-dtb 不含设备树，内核无 DTB，开机 logo 后即死机。
+        # 本树无 cannon.dts（只有 mt6853.dts），stock config 里的追加 DTB 名 "mediatek/cannon"
+        # 在本树不存在，覆盖为 mt6853，否则 Image.gz-dtb 目标找不到 dtb 而失败。
         scripts/config --file out/.config -e BUILD_ARM64_APPENDED_DTB_IMAGE
         scripts/config --file out/.config --set-str BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES "mediatek/mt6853"
+
+        # 对齐原厂 UTS/vermagic：stock = 4.14.186-perf-00243-g9a0d96109bda
+        # （LOCALVERSION="-perf" + LOCALVERSION_AUTO=y）。用原厂全串并关闭 AUTO，
+        # 使内核版本串与 vendor 模块的 vermagic 完全一致，避免模块 insmod 被拒。
+        scripts/config --file out/.config --set-str LOCALVERSION "-perf-00243-g9a0d96109bda"
+        scripts/config --file out/.config -d LOCALVERSION_AUTO
 
         # 探针：若 gcc 不支持 -fstack-protector-strong（Makefile 对 STRONG 会强制传该 flag，
         # 不支持则整树编译崩），回退到 Regular，避免全量失败
@@ -215,16 +200,21 @@ jobs:
         make -s O=out ARCH=arm64 olddefconfig
 
         # 打印核对配置
-        grep -E "CONFIG_KSU=|CONFIG_KSU_SUSFS|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT_HOOK|CONFIG_KSU_SUSFS_SUS_PATH|CONFIG_KSU_SUSFS_SUS_MOUNT|CONFIG_KSU_SUSFS_SUS_MAP|CONFIG_DEBUG_KERNEL|CONFIG_MODULES|CONFIG_KALLSYMS|CONFIG_KALLSYMS_ALL|CONFIG_COMPAT_VDSO|CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE" out/.config
+        grep -E "CONFIG_(KSU=|KSU_SUSFS=|KSU_SUSFS_SUS_MAP=|KSU_MANUAL_HOOK|KSU_TRACEPOINT_HOOK|DEBUG_KERNEL|MODULES=|KALLSYMS|MODVERSIONS=|LOCALVERSION|PREEMPT=|COMPAT=|RANDOMIZE_BASE=|CC_STACKPROTECTOR_STRONG=|BUILD_ARM64_APPENDED_DTB_IMAGE|ARCH_MTK_PROJECT)" out/.config
         grep -q "^CONFIG_KSU=y" out/.config || { echo "❌ CONFIG_KSU 未开启"; exit 1; }
         grep -q "^CONFIG_KSU_SUSFS=y" out/.config || { echo "❌ CONFIG_KSU_SUSFS 未开启"; exit 1; }
         grep -q "^# CONFIG_KSU_MANUAL_HOOK is not set" out/.config || { echo "❌ CONFIG_KSU_MANUAL_HOOK 必须关闭"; exit 1; }
         grep -q "^# CONFIG_KSU_TRACEPOINT_HOOK is not set" out/.config || { echo "❌ CONFIG_KSU_TRACEPOINT_HOOK 必须关闭"; exit 1; }
 
+        # 与原厂对齐的版本/模块校验（vermagic 兼容 vendor 模块）
+        grep -q '^CONFIG_LOCALVERSION="-perf-00243-g9a0d96109bda"' out/.config || { echo "❌ LOCALVERSION 未对齐原厂"; exit 1; }
+        grep -q "^# CONFIG_LOCALVERSION_AUTO is not set" out/.config || { echo "❌ LOCALVERSION_AUTO 应关闭"; exit 1; }
+        grep -q "^CONFIG_MODVERSIONS=y" out/.config || { echo "❌ MODVERSIONS 未开启"; exit 1; }
+        grep -q "^CONFIG_MODULES=y" out/.config || { echo "❌ MODULES 未开启"; exit 1; }
+
         # MTK 厂商驱动符号检查（缺了 vmlinux 链接期会 undefined symbol）
         grep -q "^CONFIG_SND_SOC_AW87519=y" out/.config || { echo "❌ CONFIG_SND_SOC_AW87519 未开启"; exit 1; }
         grep -q "^CONFIG_SND_SOC_AW87359=y" out/.config || { echo "❌ CONFIG_SND_SOC_AW87359 未开启"; exit 1; }
-        grep -q "^CONFIG_NFC_PN553_DEVICES=y" out/.config || { echo "❌ CONFIG_NFC_PN553_DEVICES 未开启"; exit 1; }
         grep -q "^CONFIG_NXP_P73_DEVICES=y" out/.config || { echo "❌ CONFIG_NXP_P73_DEVICES 未开启"; exit 1; }
         grep -q "^CONFIG_REGULATOR_PM8008=y" out/.config || { echo "❌ CONFIG_REGULATOR_PM8008 未开启"; exit 1; }
         grep -q "^CONFIG_MTK_IMGSENSOR=y" out/.config || { echo "❌ CONFIG_MTK_IMGSENSOR 未开启"; exit 1; }
@@ -233,72 +223,28 @@ jobs:
         grep -q "^CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE=y" out/.config || { echo "❌ CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE 未开启"; exit 1; }
         grep -q '^CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES="mediatek/mt6853"' out/.config || { echo "❌ CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES 应为 mediatek/mt6853"; exit 1; }
 
-    - name: 编译完整内核 Image.gz-dtb（内置 BakaSU + SUSFS）
+    - name: 编译 Image.gz-dtb（clang 11.0.1 + GNU binutils，内置 BakaSU + SUSFS）
       run: |
         cd $GITHUB_WORKSPACE
-        # 复用 defconfig 步骤的合成逻辑。
-        # gcc 驱动选择：优先 canonical 名称（real-<tp>-gcc / <tp>-gcc / <tp>-gcc-4.9*）取体积最大者
-        # —— 即真正的 ELF 驱动，避开仅 1733B 的 python2 wrapper（runner 不一定有 /usr/bin/python）。
-        # 名称都没命中（未知布局）时，再扫描所有可执行文件用 --version 精确识别（含 "(GCC)" 才算）。
-        # binutils 取 canonical 名（$t 或 <tp>-$t）体积最大者，合成到 synth-bin/（与 lib/libexec 同级）。
-        GCC64_ROOT="$(cd kernel_workspace/gcc64 && pwd)"
-        GCC32_ROOT="$(cd kernel_workspace/gcc32 && pwd)"
-        pick_gcc_driver() {
-          local root="$1" tp="$2"
-          { find -L "$root" -type f -perm -111 -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' \
-                \( -name "real-$tp-gcc" -o -name "$tp-gcc" -o -name "$tp-gcc-4.9*" \) 2>/dev/null
-            find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null \
-              | while read -r f; do printf '%s' "$( "$f" --version 2>&1 | head -1 )" | grep -Eq '\(GCC\)|gcc version' && echo "$f"; done
-          } | sort -u | while read -r f; do printf '%s\t%s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -f2-
-        }
-        GCC64_CC="$(pick_gcc_driver "$GCC64_ROOT" aarch64-linux-android)"
-        GCC32_CC="$(pick_gcc_driver "$GCC32_ROOT" arm-linux-androideabi)"
-        if [ ! -x "$GCC64_CC" ]; then
-          echo "❌ gcc64 未找到 gcc 驱动，候选可执行文件 --version 一览："
-          find -L "$GCC64_ROOT" -type f -perm -111 -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '    %s -> %s\n' "$f" "$( "$f" --version 2>&1 | head -1 )"; done
-          exit 1
-        fi
-        if [ ! -x "$GCC32_CC" ]; then echo "❌ gcc32 未找到 gcc 驱动"; exit 1; fi
-        mk_toolchain_synth() {
-          local root="$1" tp="$2"
-          root="$(cd "$root" && pwd)"
-          local sbin="$root/synth-bin"
-          rm -rf "$sbin"
-          mkdir -p "$sbin"
-          local P t
-          for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
-            P=$(find -L "$root" -type f -perm -111 -not -path '*/synth-bin/*' \( -name "$t" -o -name "$tp-$t" \) 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
-            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -not -path '*/synth-bin/*' \( -name "$t" -o -name "$tp-$t" \) 2>/dev/null | head -1)
-            [ -n "$P" ] && ln -sf "$P" "$sbin/$tp-$t" || true
-          done
-          [ -e "$sbin/$tp-ld.bfd" ] && ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" || true
-          echo "== $tp binutils =="; ls -l "$sbin"
-        }
-        mk_toolchain_synth "$GCC64_ROOT" aarch64-linux-android || exit 1
-        mk_toolchain_synth "$GCC32_ROOT" arm-linux-androideabi || exit 1
-        G64_SBIN=$GCC64_ROOT/synth-bin
-        G32_SBIN=$GCC32_ROOT/synth-bin
-        # 真 ELF 驱动以 canonical 名放进 synth-bin（与 lib/libexec 同级，gcc 依 argv0 前缀可定位 cc1/libgcc）
-        ln -sf "$GCC64_CC" "$G64_SBIN/aarch64-linux-android-gcc"
-        ln -sf "$GCC32_CC" "$G32_SBIN/arm-linux-androideabi-gcc"
-        export PATH="$G64_SBIN:$G32_SBIN:$PATH"
-        export CROSS_COMPILE="$G64_SBIN/aarch64-linux-android-"
-        export CROSS_COMPILE_ARM32="$G32_SBIN/arm-linux-androideabi-"
-        export CC="$G64_SBIN/aarch64-linux-android-gcc"
+        CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang"
+        export PATH="$CLANG_DIR/bin:$PATH"
+        export CC="$CLANG_DIR/bin/clang"
+        export CROSS_COMPILE="aarch64-linux-gnu-"
+        export CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+        export CLANG_TRIPLE="aarch64-linux-gnu-"
 
         echo "==== 编译环境诊断 ===="
         nproc
         df -h /
         free -m | head -2
         "$CC" --version | head -1
-        command -v aarch64-linux-android-as aarch64-linux-android-ld aarch64-linux-android-ar arm-linux-androideabi-as || true
+        command -v aarch64-linux-gnu-ld aarch64-linux-gnu-ar aarch64-linux-gnu-objcopy aarch64-linux-gnu-elfedit || true
 
-        # MTK 4.14 官方用 AOSP GCC4.9 编译。之前改用 clang10 + ld.lld，产出的 vmlinux
-        # 与原版 DTB/ramdisk 组合不可引导：开机卡 logo（早期挂起/回退）。改回 GCC4.9：
-        # CC / LD 均走 $(CROSS_COMPILE) 绝对路径（GNU ld）。去掉 ccache，避免其查找编译器的
-        # 偶发失败干扰；-j2 + 失败续跑策略保留（防止 runner 内存不足把 cc1 杀掉）。
+        # 原厂 = clang 11.0.1 + GNU binutils（bfd ld）：CC 走 clang（integrated-as 编 .S），
+        # LD/AR/OBJCOPY 走 $(CROSS_COMPILE) 的 aarch64-linux-gnu-*。保留 -j2 + 失败续跑，
+        # 防止 runner 内存不足把编译进程 OOM 杀掉。
         JOBS=2
-        CMD=(make -s -j$JOBS O=out ARCH=arm64 CC="$CC" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" Image.gz-dtb)
+        CMD=(make -s -j$JOBS O=out ARCH=arm64 CC="$CC" CLANG_TRIPLE="$CLANG_TRIPLE" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" Image.gz-dtb)
         for attempt in 1 2 3; do
           echo "==== 编译尝试 #${attempt} ===="
           "${CMD[@]}" || true
@@ -315,6 +261,8 @@ jobs:
         echo "Image.gz=$gz_sz Image.gz-dtb=$dtd_sz"
         [ "$dtd_sz" -gt "$gz_sz" ] || { echo "❌ Image.gz-dtb 未包含 DTB"; exit 1; }
 
+        # 校验内核版本串已对齐原厂（应含 4.14.186-perf-00243-g9a0d96109bda）
+        strings out/vmlinux | grep -m1 "Linux version" || true
         echo "==== 完整内核编译完成，BakaSU + SUSFS 已内置 ===="
 
     - name: 打包 new-boot.img（保留原版 v2 DTB 区）
