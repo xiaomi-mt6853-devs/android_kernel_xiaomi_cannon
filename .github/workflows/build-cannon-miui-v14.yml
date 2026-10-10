@@ -126,7 +126,10 @@ jobs:
         cd $GITHUB_WORKSPACE
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
 
-        make -s -j$(nproc --all) O=out ARCH=arm64 k6853v1_64_defconfig
+        # 注意：必须用 cannon_defconfig（该机型专用配置），它内置 AW87519/AW87359 音频功放、
+        # REGULATOR_PM8008(camera_power)、NFC pn553/p73、ov02b10 摄像头 OTP 等项目驱动。
+        # 之前误用通用 k6853v1_64_defconfig 导致 vmlinux 链接期这些符号 undefined symbol。
+        make -s -j$(nproc --all) O=out ARCH=arm64 cannon_defconfig
 
         # BakaSU 必需配置（CONFIG_KSU 来自集成后的 drivers/kernelsu/Kconfig）
         scripts/config --file out/.config -e DEBUG_KERNEL
@@ -157,6 +160,16 @@ jobs:
         grep -q "^CONFIG_KSU_SUSFS=y" out/.config || { echo "❌ CONFIG_KSU_SUSFS 未开启"; exit 1; }
         grep -q "^# CONFIG_KSU_MANUAL_HOOK is not set" out/.config || { echo "❌ CONFIG_KSU_MANUAL_HOOK 必须关闭"; exit 1; }
         grep -q "^# CONFIG_KSU_TRACEPOINT_HOOK is not set" out/.config || { echo "❌ CONFIG_KSU_TRACEPOINT_HOOK 必须关闭"; exit 1; }
+
+        # MTK 厂商驱动符号检查（缺了 vmlinux 链接期会 undefined symbol）
+        grep -q "^CONFIG_SND_SOC_AW87519=y" out/.config || { echo "❌ CONFIG_SND_SOC_AW87519 未开启"; exit 1; }
+        grep -q "^CONFIG_SND_SOC_AW87359=y" out/.config || { echo "❌ CONFIG_SND_SOC_AW87359 未开启"; exit 1; }
+        grep -q "^CONFIG_NFC_PN553_DEVICES=y" out/.config || { echo "❌ CONFIG_NFC_PN553_DEVICES 未开启"; exit 1; }
+        grep -q "^CONFIG_NXP_P73_DEVICES=y" out/.config || { echo "❌ CONFIG_NXP_P73_DEVICES 未开启"; exit 1; }
+        grep -q "^CONFIG_REGULATOR_PM8008=y" out/.config || { echo "❌ CONFIG_REGULATOR_PM8008 未开启"; exit 1; }
+        grep -q "^CONFIG_MTK_IMGSENSOR=y" out/.config || { echo "❌ CONFIG_MTK_IMGSENSOR 未开启"; exit 1; }
+        grep -q '^CONFIG_ARCH_MTK_PROJECT="k6853v1_64_6360"' out/.config || { echo "❌ CONFIG_ARCH_MTK_PROJECT 应为 k6853v1_64_6360"; exit 1; }
+        grep -q '^CONFIG_CUSTOM_KERNEL_IMGSENSOR=".*ov02b10ofilm_mipi_raw.*"' out/.config || { echo "❌ CONFIG_CUSTOM_KERNEL_IMGSENSOR 缺少 ov02b10ofilm_mipi_raw"; exit 1; }
 
     - name: 编译完整内核 Image.gz-dtb（内置 BakaSU + SUSFS）
       run: |
