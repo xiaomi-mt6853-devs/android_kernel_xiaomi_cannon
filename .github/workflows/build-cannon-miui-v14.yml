@@ -124,22 +124,43 @@ jobs:
     - name: 加载defconfig，开启 BakaSU + SUSFS 配置
       run: |
         cd $GITHUB_WORKSPACE
-        # ---- 定位 AOSP GCC4.9 的真实解包位置（兼容 bin/ 或带子目录两种布局）----
-        G64_BIN=$(dirname "$(find kernel_workspace/gcc64 -type f -name aarch64-linux-android-gcc 2>/dev/null | head -1)")
-        G32_BIN=$(dirname "$(find kernel_workspace/gcc32 -type f -name arm-linux-androideabi-gcc 2>/dev/null | head -1)")
-        if [ -z "$G64_BIN" ] || [ ! -x "$G64_BIN/aarch64-linux-android-gcc" ]; then
-          echo "❌ 未找到 aarch64-linux-android-gcc，gcc64 实际布局："; find kernel_workspace/gcc64 -maxdepth 3 | head -30; exit 1
-        fi
-        if [ -z "$G32_BIN" ] || [ ! -x "$G32_BIN/arm-linux-androideabi-gcc" ]; then
-          echo "❌ 未找到 arm-linux-androideabi-gcc，gcc32 实际布局："; find kernel_workspace/gcc32 -maxdepth 3 | head -30; exit 1
-        fi
-        export PATH="$G64_BIN:$G32_BIN:$PATH"
-        export CROSS_COMPILE="$G64_BIN/"
-        export CROSS_COMPILE_ARM32="$G32_BIN/"
-        export CC="$G64_BIN/aarch64-linux-android-gcc"
-        echo "== 工具链定位 =="
+        # ---- 定位 AOSP GCC4.9 真实工具并合成 canonical bin 目录 ----
+        # googlesource 的 gcc64 顶层 bin/ 是符号链接/包装脚本（aarch64-linux-android-gcc 仅 1733B），
+        # 真实 ELF 驱动与 binutils 散落在 bin/ 与 aarch64-linux-android/bin/。此处用 find -L（跟随
+        # 符号链接、只看真实文件）+ 按体积优先挑选真实工具，并在 gcc64|gcc32 下新建 synth-bin/
+        # （与 libexec/ lib/ 同级），让 gcc 依据 argv0 就能定位 cc1/libgcc，与官方布局语义一致。
+        mk_toolchain_synth() {
+          local root="$1" tp="$2"
+          root="$(cd "$root" && pwd)"
+          local sbin="$root/synth-bin"
+          mkdir -p "$sbin"
+          local REAL P t
+          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+          [ -z "$REAL" ] && REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -d' ' -f2-) || true
+          if [ -z "$REAL" ]; then
+            echo "❌ $tp: 未找到真实 gcc 驱动，$root 实际布局："; find "$root" -maxdepth 3 | head -30
+            return 1
+          fi
+          ln -sf "$REAL" "$sbin/$tp-gcc"
+          for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
+            P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | head -1)
+            if [ -n "$P" ]; then ln -sf "$P" "$sbin/$tp-$t"; fi || true
+          done
+          [ -e "$sbin/$tp-ld" ] || ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" 2>/dev/null || true
+          echo "== $tp synth-bin =="; ls -l "$sbin"
+        }
+        mk_toolchain_synth kernel_workspace/gcc64 aarch64-linux-android || exit 1
+        mk_toolchain_synth kernel_workspace/gcc32 arm-linux-androideabi || exit 1
+        G64_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc64/synth-bin
+        G32_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc32/synth-bin
+        export PATH="$G64_SBIN:$G32_SBIN:$PATH"
+        export CROSS_COMPILE="$G64_SBIN/"
+        export CROSS_COMPILE_ARM32="$G32_SBIN/"
+        export CC="$G64_SBIN/aarch64-linux-android-gcc"
+        echo "== 工具链检查 =="
         "$CC" --version | head -1
-        ls -l "$G64_BIN/"aarch64-linux-android-as "$G64_BIN/"aarch64-linux-android-ld "$G32_BIN/"arm-linux-androideabi-gcc || true
+        command -v aarch64-linux-android-as aarch64-linux-android-ld arm-linux-androideabi-gcc || true
 
         # 注意：必须用 cannon_defconfig（该机型专用配置），它内置 AW87519/AW87359 音频功放、
         # REGULATOR_PM8008(camera_power)、NFC pn553/p73、ov02b10 摄像头 OTP 等项目驱动。
@@ -196,23 +217,43 @@ jobs:
     - name: 编译完整内核 Image.gz-dtb（内置 BakaSU + SUSFS）
       run: |
         cd $GITHUB_WORKSPACE
-        # 复用 defconfig 步骤的定位逻辑：找真实 gcc/as/ld 绝对路径（兼容两种解包布局）
-        G64_BIN=$(dirname "$(find kernel_workspace/gcc64 -type f -name aarch64-linux-android-gcc 2>/dev/null | head -1)")
-        G32_BIN=$(dirname "$(find kernel_workspace/gcc32 -type f -name arm-linux-androideabi-gcc 2>/dev/null | head -1)")
-        if [ -z "$G64_BIN" ] || [ ! -x "$G64_BIN/aarch64-linux-android-gcc" ]; then
-          echo "❌ 未找到 aarch64-linux-android-gcc，gcc64 实际布局："; find kernel_workspace/gcc64 -maxdepth 3 | head -30; exit 1
-        fi
-        export PATH="$G64_BIN:$G32_BIN:$PATH"
-        export CROSS_COMPILE="$G64_BIN/"
-        export CROSS_COMPILE_ARM32="$G32_BIN/"
-        export CC="$G64_BIN/aarch64-linux-android-gcc"
+        # 复用 defconfig 步骤的合成逻辑：find -L 只认真实文件、按体积挑 ELF，建 synth-bin/
+        mk_toolchain_synth() {
+          local root="$1" tp="$2"
+          root="$(cd "$root" && pwd)"
+          local sbin="$root/synth-bin"
+          mkdir -p "$sbin"
+          local REAL P t
+          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+          [ -z "$REAL" ] && REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -d' ' -f2-) || true
+          if [ -z "$REAL" ]; then
+            echo "❌ $tp: 未找到真实 gcc 驱动，$root 实际布局："; find "$root" -maxdepth 3 | head -30
+            return 1
+          fi
+          ln -sf "$REAL" "$sbin/$tp-gcc"
+          for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
+            P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
+            [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" 2>/dev/null | head -1)
+            if [ -n "$P" ]; then ln -sf "$P" "$sbin/$tp-$t"; fi || true
+          done
+          [ -e "$sbin/$tp-ld" ] || ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" 2>/dev/null || true
+          echo "== $tp synth-bin =="; ls -l "$sbin"
+        }
+        mk_toolchain_synth kernel_workspace/gcc64 aarch64-linux-android || exit 1
+        mk_toolchain_synth kernel_workspace/gcc32 arm-linux-androideabi || exit 1
+        G64_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc64/synth-bin
+        G32_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc32/synth-bin
+        export PATH="$G64_SBIN:$G32_SBIN:$PATH"
+        export CROSS_COMPILE="$G64_SBIN/"
+        export CROSS_COMPILE_ARM32="$G32_SBIN/"
+        export CC="$G64_SBIN/aarch64-linux-android-gcc"
 
         echo "==== 编译环境诊断 ===="
         nproc
         df -h /
         free -m | head -2
         "$CC" --version | head -1
-        command -v aarch64-linux-android-as aarch64-linux-android-ld arm-linux-androideabi-gcc
+        command -v aarch64-linux-android-as aarch64-linux-android-ld arm-linux-androideabi-gcc || true
 
         # MTK 4.14 官方用 AOSP GCC4.9 编译。之前改用 clang10 + ld.lld，产出的 vmlinux
         # 与原版 DTB/ramdisk 组合不可引导：开机卡 logo（早期挂起/回退）。改回 GCC4.9：
