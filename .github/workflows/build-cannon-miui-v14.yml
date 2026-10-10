@@ -127,17 +127,23 @@ jobs:
     - name: 以原厂 stock .config 为基底，开启 BakaSU + SUSFS 配置
       run: |
         cd $GITHUB_WORKSPACE
-        # 原厂同款版本：clang 11.0.1（LLVM 官方 release）。CC 走 clang（integrated-as 编 .S），
-        # LD/AR/OBJCOPY/NM/... 走 $(CROSS_COMPILE) 的 aarch64-linux-gnu-*（apt binutils，bfd ld）。
+        # 原厂同款：clang 11.0.1 + LLD（stock config 含 CONFIG_LTO_CLANG/THINLTO=y，LTO 链接必须用
+        # lld，否则 Makefile:681-687 回退到 ld.gold 并把 lld 专属 --thinlto-cache-dir 传给 gold 报错）。
+        # 故走 LLVM=1（LD=ld.lld / AR=llvm-ar / NM=llvm-nm / OBJCOPY=llvm-objcopy ...）。
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang"
         export PATH="$CLANG_DIR/bin:$PATH"
+        export LLVM=1
+        export LLVM_IAS=1
         export CC="$CLANG_DIR/bin/clang"
+        export LD="$CLANG_DIR/bin/ld.lld"
         export CROSS_COMPILE="aarch64-linux-gnu-"
         export CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
         export CLANG_TRIPLE="aarch64-linux-gnu-"
         echo "== 工具链检查 =="
         "$CC" --version | head -1
-        command -v aarch64-linux-gnu-ld aarch64-linux-gnu-ar aarch64-linux-gnu-objcopy aarch64-linux-gnu-elfedit || true
+        "$LD" --version | head -1
+        ls -l "$CLANG_DIR/bin/llvm-ar" "$CLANG_DIR/bin/llvm-nm"
+        command -v aarch64-linux-gnu-as aarch64-linux-gnu-elfedit || true
 
         rm -rf out && mkdir -p out
         # 从原版 boot-14.img 的内核里抽出原厂完整 .config（IKCONFIG 内嵌）作为构建基底：
@@ -228,7 +234,13 @@ jobs:
         cd $GITHUB_WORKSPACE
         CLANG_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang"
         export PATH="$CLANG_DIR/bin:$PATH"
+        # 原厂 stock = clang 11.0.1 + LLD（stock config 含 CONFIG_LTO_CLANG/THINLTO=y）。
+        # LTO 链接必须用 lld：否则 Makefile:681-687 会回退到 ld.gold 并把 lld 专属的
+        # --thinlto-cache-dir 传给 gold 而报错。故走 LLVM=1（LD=ld.lld / AR=llvm-ar / NM=llvm-nm）。
+        export LLVM=1
+        export LLVM_IAS=1
         export CC="$CLANG_DIR/bin/clang"
+        export LD="$CLANG_DIR/bin/ld.lld"
         export CROSS_COMPILE="aarch64-linux-gnu-"
         export CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
         export CLANG_TRIPLE="aarch64-linux-gnu-"
@@ -238,13 +250,17 @@ jobs:
         df -h /
         free -m | head -2
         "$CC" --version | head -1
-        command -v aarch64-linux-gnu-ld aarch64-linux-gnu-ar aarch64-linux-gnu-objcopy aarch64-linux-gnu-elfedit || true
+        "$LD" --version | head -1
+        ls -l "$CLANG_DIR/bin/llvm-ar" "$CLANG_DIR/bin/llvm-nm"
+        command -v aarch64-linux-gnu-as aarch64-linux-gnu-elfedit || true
 
-        # 原厂 = clang 11.0.1 + GNU binutils（bfd ld）：CC 走 clang（integrated-as 编 .S），
-        # LD/AR/OBJCOPY 走 $(CROSS_COMPILE) 的 aarch64-linux-gnu-*。保留 -j2 + 失败续跑，
-        # 防止 runner 内存不足把编译进程 OOM 杀掉。
+        # 原厂 = clang 11.0.1 + LLD：CC/LD 全部走 clang 11.0.1 + ld.lld（LLVM=1，integrated-as）。
+        # 保留 -j2 + 失败续跑，防止 runner 内存不足把编译进程 OOM 杀掉。
         JOBS=2
-        CMD=(make -s -j$JOBS O=out ARCH=arm64 CC="$CC" CLANG_TRIPLE="$CLANG_TRIPLE" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" Image.gz-dtb)
+        CMD=(make -s -j$JOBS O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+             CC="$CC" LD="$LD" CLANG_TRIPLE="$CLANG_TRIPLE" \
+             CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" \
+             Image.gz-dtb)
         for attempt in 1 2 3; do
           echo "==== 编译尝试 #${attempt} ===="
           "${CMD[@]}" || true
