@@ -124,12 +124,22 @@ jobs:
     - name: 加载defconfig，开启 BakaSU + SUSFS 配置
       run: |
         cd $GITHUB_WORKSPACE
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
-
-        # 与编译步骤保持同一工具链：用 AOSP GCC4.9，保证 Kconfig 的编译器探测结果一致
-        export CC=aarch64-linux-android-gcc
-        export CROSS_COMPILE=aarch64-linux-android-
-        export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+        # ---- 定位 AOSP GCC4.9 的真实解包位置（兼容 bin/ 或带子目录两种布局）----
+        G64_BIN=$(dirname "$(find kernel_workspace/gcc64 -type f -name aarch64-linux-android-gcc 2>/dev/null | head -1)")
+        G32_BIN=$(dirname "$(find kernel_workspace/gcc32 -type f -name arm-linux-androideabi-gcc 2>/dev/null | head -1)")
+        if [ -z "$G64_BIN" ] || [ ! -x "$G64_BIN/aarch64-linux-android-gcc" ]; then
+          echo "❌ 未找到 aarch64-linux-android-gcc，gcc64 实际布局："; find kernel_workspace/gcc64 -maxdepth 3 | head -30; exit 1
+        fi
+        if [ -z "$G32_BIN" ] || [ ! -x "$G32_BIN/arm-linux-androideabi-gcc" ]; then
+          echo "❌ 未找到 arm-linux-androideabi-gcc，gcc32 实际布局："; find kernel_workspace/gcc32 -maxdepth 3 | head -30; exit 1
+        fi
+        export PATH="$G64_BIN:$G32_BIN:$PATH"
+        export CROSS_COMPILE="$G64_BIN/"
+        export CROSS_COMPILE_ARM32="$G32_BIN/"
+        export CC="$G64_BIN/aarch64-linux-android-gcc"
+        echo "== 工具链定位 =="
+        "$CC" --version | head -1
+        ls -l "$G64_BIN/"aarch64-linux-android-as "$G64_BIN/"aarch64-linux-android-ld "$G32_BIN/"arm-linux-androideabi-gcc || true
 
         # 注意：必须用 cannon_defconfig（该机型专用配置），它内置 AW87519/AW87359 音频功放、
         # REGULATOR_PM8008(camera_power)、NFC pn553/p73、ov02b10 摄像头 OTP 等项目驱动。
@@ -186,19 +196,30 @@ jobs:
     - name: 编译完整内核 Image.gz-dtb（内置 BakaSU + SUSFS）
       run: |
         cd $GITHUB_WORKSPACE
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
+        # 复用 defconfig 步骤的定位逻辑：找真实 gcc/as/ld 绝对路径（兼容两种解包布局）
+        G64_BIN=$(dirname "$(find kernel_workspace/gcc64 -type f -name aarch64-linux-android-gcc 2>/dev/null | head -1)")
+        G32_BIN=$(dirname "$(find kernel_workspace/gcc32 -type f -name arm-linux-androideabi-gcc 2>/dev/null | head -1)")
+        if [ -z "$G64_BIN" ] || [ ! -x "$G64_BIN/aarch64-linux-android-gcc" ]; then
+          echo "❌ 未找到 aarch64-linux-android-gcc，gcc64 实际布局："; find kernel_workspace/gcc64 -maxdepth 3 | head -30; exit 1
+        fi
+        export PATH="$G64_BIN:$G32_BIN:$PATH"
+        export CROSS_COMPILE="$G64_BIN/"
+        export CROSS_COMPILE_ARM32="$G32_BIN/"
+        export CC="$G64_BIN/aarch64-linux-android-gcc"
 
         echo "==== 编译环境诊断 ===="
         nproc
         df -h /
         free -m | head -2
+        "$CC" --version | head -1
+        command -v aarch64-linux-android-as aarch64-linux-android-ld arm-linux-androideabi-gcc
 
         # MTK 4.14 官方用 AOSP GCC4.9 编译。之前改用 clang10 + ld.lld，产出的 vmlinux
         # 与原版 DTB/ramdisk 组合不可引导：开机卡 logo（早期挂起/回退）。改回 GCC4.9：
-        # CC=aarch64-linux-android-gcc，LD 不显式指定即取 $(CROSS_COMPILE)ld (GNU ld)。
-        # -j2 + 失败续跑策略保留（防止 runner 内存不足把 ccache/cc1 杀掉）。
+        # CC / LD 均走 $(CROSS_COMPILE) 绝对路径（GNU ld）。去掉 ccache，避免其查找编译器的
+        # 偶发失败干扰；-j2 + 失败续跑策略保留（防止 runner 内存不足把 cc1 杀掉）。
         JOBS=2
-        CMD=(make -s -j$JOBS CC="ccache aarch64-linux-android-gcc" O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- Image.gz-dtb)
+        CMD=(make -s -j$JOBS O=out ARCH=arm64 CC="$CC" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" Image.gz-dtb)
         for attempt in 1 2 3; do
           echo "==== 编译尝试 #${attempt} ===="
           "${CMD[@]}" || true
