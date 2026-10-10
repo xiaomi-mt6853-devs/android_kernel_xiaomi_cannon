@@ -210,15 +210,53 @@ jobs:
 
         echo "==== 完整内核编译完成，BakaSU + SUSFS 已内置 ===="
 
-    - name: 打包 new-boot.img
+    - name: 打包 new-boot.img（保留原版 v2 DTB 区）
       run: |
         cd $GITHUB_WORKSPACE
-        cp boot-14.img kernel_workspace/base-boot.img
-        cd kernel_workspace
-        abootimg -x base-boot.img bootimg.cfg initrd.img zImage
-        cp $GITHUB_WORKSPACE/out/arch/arm64/boot/Image.gz-dtb zImage
-        abootimg --create ${PROJECT_NAME}-${VERSION}.img -f bootimg.cfg -k zImage -r initrd.img
-        echo "✅ ${PROJECT_NAME}-${VERSION}.img 打包完成"
+        # 本机制造的 boot-14.img 是 header v2：设备树在 boot 镜像自带 DTB 区（非内核追加），
+        # lk 直接读镜像里的 DTB 区传给内核。abootimg 只认 v0、会丢掉 DTB 区导致开机 logo 后
+        # 死机，因此改用自制 v2 重打包：完整保留原版 DTB 区/os_version/cmdline，仅替换内核。
+        python3 - <<'EOF'
+        import struct, os
+        stock = 'boot-14.img'
+        kpath = 'out/arch/arm64/boot/Image.gz-dtb'
+        out = os.path.join('kernel_workspace', '%s-%s.img' % (os.environ['PROJECT_NAME'], os.environ['VERSION']))
+
+        d = open(stock, 'rb').read()
+        page  = struct.unpack('<I', d[36:40])[0]
+        hsize = struct.unpack('<I', d[1644:1648])[0]
+        ksz   = struct.unpack('<I', d[8:12])[0]
+        rsz   = struct.unpack('<I', d[16:20])[0]
+        dsz   = struct.unpack('<I', d[1648:1652])[0]
+        ver   = struct.unpack('<I', d[40:44])[0]
+        osv   = struct.unpack('<I', d[44:48])[0]
+        assert ver == 2 and dsz > 0, '需要 v2 boot 镜像（当前 boot-14.img 是 v2）'
+        kstart = page
+        rstart = (kstart + ksz + page - 1) // page * page
+        dstart = (rstart + rsz + page - 1) // page * page
+        assert dstart + dsz <= len(d), 'DTB 区超出镜像'
+
+        kdata = open(kpath, 'rb').read()
+        def pad(b):
+            r = len(b) % page
+            return b if r == 0 else b + b'\0' * (page - r)
+
+        hdr = bytearray(pad(d[0:hsize]))
+        struct.pack_into('<I', hdr, 8, len(kdata))   # 仅更新 kernel_size
+        img = bytes(hdr) + pad(kdata) + pad(d[rstart:rstart + rsz]) + pad(d[dstart:dstart + dsz])
+        open(out, 'wb').write(img)
+
+        # 回读自检
+        c = open(out, 'rb').read()
+        assert struct.unpack('<I', c[40:44])[0] == 2, 'header version 丢失'
+        assert struct.unpack('<I', c[1648:1652])[0] == dsz, 'DTB 区丢失'
+        assert struct.unpack('<I', c[44:48])[0] == osv, 'os_version 丢失'
+        nk = struct.unpack('<I', c[8:12])[0]
+        nr = (page + nk + page - 1) // page * page
+        nd = (nr + rsz + page - 1) // page * page
+        assert c[nd + 64:nd + 68] == b'\xd0\x0d\xfe\xed', 'FDT 未在预期位置'
+        print('✅ %s 打包完成 (%d B): kernel=%d ramdisk=%d dtb=%d' % (os.path.basename(out), len(img), len(kdata), rsz, dsz))
+        EOF
 
     - name: 制作内核AnyKernel3卡刷包
       run: |
