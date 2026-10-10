@@ -51,12 +51,40 @@ jobs:
         curl -LSs --retry 3 https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.14.patch -o /tmp/susfs_4.14.patch
         patch -p1 --forward --fuzz=3 --no-backup-if-mismatch < /tmp/susfs_4.14.patch || true
 
-        # 修复 task_mmu.c 已知的无害冲突：MTK 内核没有 <linux/ctype.h>，导致 SUSFS 补丁的 include 块定位失败
-        # （本地已验证仅此 include 块与一个空白行为拒绝，其余 6/8 hunk 均成功，且无 .rej）
-        if ! grep -q 'susfs_def.h' fs/proc/task_mmu.c; then
-          tmpf=$(mktemp)
-          awk '{print} /^#include <linux\/mm_inline.h>$/ && !done { print "#if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)"; print "#include <linux/susfs_def.h>"; print "#endif"; done=1 }' fs/proc/task_mmu.c > "$tmpf" && mv "$tmpf" fs/proc/task_mmu.c
-        fi
+        # 修复 task_mmu.c 的 MTK 特有问题（本地已按该内核逐条验证）：
+        #  1) MTK 删掉了 <linux/ctype.h>，SUSFS 补丁的 include 块在 task_mmu.c 定位失败 -> 补回 susfs_def.h
+        #  2) MTK 把 smaps 统计拆成 void smap_gather_stats()，SUSFS 的 show_smap(返回int) hunk 被 fuzz 错落到该
+        #     void 函数 -> "void function 'smap_gather_stats' should not return a value"。移除错位块并在
+        #     int show_smap()/show_smaps_rollup() 里正确重新插入。
+        python3 - <<'EOF'
+        p = 'fs/proc/task_mmu.c'
+        s = open(p).read()
+
+        if 'susfs_def.h' not in s:
+            anchor = '#include <linux/mm_inline.h>\n'
+            assert anchor in s, 'mm_inline.h anchor missing'
+            inc = ('#if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || '
+                   'defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n'
+                   '#include <linux/susfs_def.h>\n'
+                   '#endif\n')
+            s = s.replace(anchor, anchor + inc, 1)
+
+        block = ('#ifdef CONFIG_KSU_SUSFS_SUS_MAP\n'
+                 '\tif (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))\n'
+                 '\t\treturn 0;\n'
+                 '#endif\n')
+        if block in s:
+            i = s.find(block)
+            s = s[:i] + s[i + len(block):]
+
+        memset = '\tmemset(&mss, 0, sizeof(mss));\n'
+        cnt = s.count(memset)
+        assert cnt >= 1, 'memset anchor missing'
+        s = s.replace(memset, block + memset)
+
+        open(p, 'w').write(s)
+        print('[fix] task_mmu.c patched:', cnt, 'int-smaps blocks inserted')
+        EOF
         rm -f fs/proc/task_mmu.c.rej
 
         if find . -name '*.rej' | grep -q .; then
@@ -143,7 +171,7 @@ jobs:
         # GitHub Actions 免费runner(2核/7G) 并行度过高+ccache 易触发 clang 内存/管道崩溃：
         # "LLVM ERROR: IO failure on output stream: Broken pipe"，固定 -j2 并允许失败后增量续跑
         JOBS=2
-        CMD=(make -j$JOBS CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld Image.gz-dtb)
+        CMD=(make -s -j$JOBS CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld Image.gz-dtb)
         for attempt in 1 2 3; do
           echo "==== 编译尝试 #${attempt} ===="
           "${CMD[@]}" || true
