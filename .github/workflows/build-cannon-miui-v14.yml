@@ -152,6 +152,11 @@ jobs:
         scripts/config --file out/.config -e KSU_SUSFS_SUS_MAP
         scripts/config --file out/.config -d COMPAT_VDSO
 
+        # 关键：cannon_defconfig 缺失 MTK 追加 DTB 配置（其它 k6853 各 defconfig 均有）。
+        # 不开会导致产出的 Image.gz-dtb 不含设备树，内核无 DTB，开机 logo 后即死机。
+        scripts/config --file out/.config -e BUILD_ARM64_APPENDED_DTB_IMAGE
+        scripts/config --file out/.config --set-str BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES "mediatek/mt6853"
+
         make -s O=out ARCH=arm64 olddefconfig
 
         # 打印核对配置
@@ -170,6 +175,8 @@ jobs:
         grep -q "^CONFIG_MTK_IMGSENSOR=y" out/.config || { echo "❌ CONFIG_MTK_IMGSENSOR 未开启"; exit 1; }
         grep -q '^CONFIG_ARCH_MTK_PROJECT="k6853v1_64_6360"' out/.config || { echo "❌ CONFIG_ARCH_MTK_PROJECT 应为 k6853v1_64_6360"; exit 1; }
         grep -q '^CONFIG_CUSTOM_KERNEL_IMGSENSOR=".*ov02b10ofilm_mipi_raw.*"' out/.config || { echo "❌ CONFIG_CUSTOM_KERNEL_IMGSENSOR 缺少 ov02b10ofilm_mipi_raw"; exit 1; }
+        grep -q "^CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE=y" out/.config || { echo "❌ CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE 未开启"; exit 1; }
+        grep -q '^CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES="mediatek/mt6853"' out/.config || { echo "❌ CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES 应为 mediatek/mt6853"; exit 1; }
 
     - name: 编译完整内核 Image.gz-dtb（内置 BakaSU + SUSFS）
       run: |
@@ -193,6 +200,14 @@ jobs:
 
         ls -l out/arch/arm64/boot/Image.gz-dtb out/vmlinux
         test -f out/arch/arm64/boot/Image.gz-dtb || { echo "❌ Image.gz-dtb 编译失败"; exit 1; }
+
+        # 校验 DTB 确实被追加进 Image.gz-dtb（缺失会导致开机 logo 后死机）
+        test -f out/arch/arm64/boot/dts/mediatek/mt6853.dtb || { echo "❌ mt6853.dtb 未生成"; exit 1; }
+        gz_sz=$(stat -c%s out/arch/arm64/boot/Image.gz)
+        dtd_sz=$(stat -c%s out/arch/arm64/boot/Image.gz-dtb)
+        echo "Image.gz=$gz_sz Image.gz-dtb=$dtd_sz"
+        [ "$dtd_sz" -gt "$gz_sz" ] || { echo "❌ Image.gz-dtb 未包含 DTB"; exit 1; }
+
         echo "==== 完整内核编译完成，BakaSU + SUSFS 已内置 ===="
 
     - name: 打包 new-boot.img
