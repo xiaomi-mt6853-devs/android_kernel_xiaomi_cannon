@@ -86,7 +86,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@v1.2
       with:
         key: build-cannon-mt6853-full-kernel-bakasu
-        max-size: 2G
+        max-size: 1G
 
     - name: 清理旧out输出目录
       run: |
@@ -134,8 +134,24 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
-        make -j$(nproc --all) CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld Image.gz-dtb
+
+        echo "==== 编译环境诊断 ===="
+        nproc
+        df -h /
+        free -m | head -2
+
+        # GitHub Actions 免费runner(2核/7G) 并行度过高+ccache 易触发 clang 内存/管道崩溃：
+        # "LLVM ERROR: IO failure on output stream: Broken pipe"，固定 -j2 并允许失败后增量续跑
+        JOBS=2
+        CMD=(make -j$JOBS CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld Image.gz-dtb)
+        for attempt in 1 2 3; do
+          echo "==== 编译尝试 #${attempt} ===="
+          "${CMD[@]}" || true
+          [ -f out/arch/arm64/boot/Image.gz-dtb ] && break
+        done
+
         ls -l out/arch/arm64/boot/Image.gz-dtb out/vmlinux
+        test -f out/arch/arm64/boot/Image.gz-dtb || { echo "❌ Image.gz-dtb 编译失败"; exit 1; }
         echo "==== 完整内核编译完成，BakaSU + SUSFS 已内置 ===="
 
     - name: 打包 new-boot.img
