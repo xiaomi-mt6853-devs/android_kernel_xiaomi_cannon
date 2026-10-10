@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 env:
   PROJECT_NAME: Cannon-BakaSU-SUSFS-Kernel
-  VERSION: V1.1
+  VERSION: V1.2
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -126,6 +126,11 @@ jobs:
         cd $GITHUB_WORKSPACE
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
 
+        # 与编译步骤保持同一工具链：用 AOSP GCC4.9，保证 Kconfig 的编译器探测结果一致
+        export CC=aarch64-linux-android-gcc
+        export CROSS_COMPILE=aarch64-linux-android-
+        export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+
         # 注意：必须用 cannon_defconfig（该机型专用配置），它内置 AW87519/AW87359 音频功放、
         # REGULATOR_PM8008(camera_power)、NFC pn553/p73、ov02b10 摄像头 OTP 等项目驱动。
         # 之前误用通用 k6853v1_64_defconfig 导致 vmlinux 链接期这些符号 undefined symbol。
@@ -188,10 +193,12 @@ jobs:
         df -h /
         free -m | head -2
 
-        # GitHub Actions 免费runner(2核/7G) 并行度过高+ccache 易触发 clang 内存/管道崩溃：
-        # "LLVM ERROR: IO failure on output stream: Broken pipe"，固定 -j2 并允许失败后增量续跑
+        # MTK 4.14 官方用 AOSP GCC4.9 编译。之前改用 clang10 + ld.lld，产出的 vmlinux
+        # 与原版 DTB/ramdisk 组合不可引导：开机卡 logo（早期挂起/回退）。改回 GCC4.9：
+        # CC=aarch64-linux-android-gcc，LD 不显式指定即取 $(CROSS_COMPILE)ld (GNU ld)。
+        # -j2 + 失败续跑策略保留（防止 runner 内存不足把 ccache/cc1 杀掉）。
         JOBS=2
-        CMD=(make -s -j$JOBS CC="ccache clang" O=out ARCH=arm64 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- LD=ld.lld Image.gz-dtb)
+        CMD=(make -s -j$JOBS CC="ccache aarch64-linux-android-gcc" O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- Image.gz-dtb)
         for attempt in 1 2 3; do
           echo "==== 编译尝试 #${attempt} ===="
           "${CMD[@]}" || true
