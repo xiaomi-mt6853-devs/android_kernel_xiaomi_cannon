@@ -124,44 +124,63 @@ jobs:
     - name: 加载defconfig，开启 BakaSU + SUSFS 配置
       run: |
         cd $GITHUB_WORKSPACE
-        # ---- 定位 AOSP GCC4.9 真实工具并合成 canonical bin 目录 ----
-        # googlesource 的 gcc64 顶层 bin/ 是符号链接/包装脚本（aarch64-linux-android-gcc 仅 1733B），
-        # 真实 ELF 驱动与 binutils 散落在 bin/ 与 aarch64-linux-android/bin/。此处用 find -L（跟随
-        # 符号链接、只看真实文件）+ 按体积优先挑选真实工具，并在 gcc64|gcc32 下新建 synth-bin/
-        # （与 libexec/ lib/ 同级），让 gcc 依据 argv0 就能定位 cc1/libgcc，与官方布局语义一致。
+        # ---- 定位 AOSP GCC4.9 真实工具 ----
+        # googlesource 的 gcc64 布局不固定：顶层 bin/ 有符号链接/包装脚本，个别版本连 -gcc 入口
+        # 都没有，且 bin/ 里还有 gcc-ar/gcc-nm/gcc-ranlib 等同名包装器。凭名字/体积挑不可靠，
+        # 所以对每个 *gcc* 候选直接 --version，只有输出真正含 gcc 的才是驱动/编译器（包装器会
+        # 透过 exec 原样输出真版本，ar/nm/ranlib 的包装器则被拒之门外）。binutils 则用 find -L
+        # 跟随符号链接 + 按体积挑真 ELF，合成到 synth-bin/（与 libexec/lib 同级）。
+        GCC64_ROOT="$(cd kernel_workspace/gcc64 && pwd)"
+        GCC32_ROOT="$(cd kernel_workspace/gcc32 && pwd)"
+        pick_gcc_driver() {
+          local root="$1" out f pick=""
+          pick=$(find -L "$root" -type f -perm -111 -name '*gcc*' \
+              -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null \
+            | while read -r f; do
+                if printf '%s\n' "$( "$f" --version 2>&1 | head -1 )" | grep -qi 'gcc'; then echo "$f"; break; fi
+              done)
+          echo "$pick"
+        }
+        GCC64_CC="$(pick_gcc_driver "$GCC64_ROOT")"
+        GCC32_CC="$(pick_gcc_driver "$GCC32_ROOT")"
+        if [ -z "$GCC64_CC" ] || [ ! -x "$GCC64_CC" ]; then
+          echo "❌ gcc64 未找到真驱动，各 *gcc* 候选的 --version 输出："
+          find -L "$GCC64_ROOT" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '    %s -> %s\n' "$f" "$( "$f" --version 2>&1 | head -1 )"; done
+          exit 1
+        fi
+        if [ -z "$GCC32_CC" ] || [ ! -x "$GCC32_CC" ]; then
+          echo "❌ gcc32 未找到真驱动，各 *gcc* 候选的 --version 输出："
+          find -L "$GCC32_ROOT" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '    %s -> %s\n' "$f" "$( "$f" --version 2>&1 | head -1 )"; done
+          exit 1
+        fi
+        # gcc 依赖 argv0 前缀寻找 cc1/libgcc，本包 cc1 在 libexec/gcc 下，统一用 GCC_EXEC_PREFIX 指路
+        export GCC_EXEC_PREFIX="$GCC64_ROOT/libexec/gcc/"
         mk_toolchain_synth() {
           local root="$1" tp="$2"
           root="$(cd "$root" && pwd)"
           local sbin="$root/synth-bin"
           rm -rf "$sbin"
           mkdir -p "$sbin"
-          local REAL P t
-          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
-          [ -z "$REAL" ] && REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -d' ' -f2-) || true
-          if [ -z "$REAL" ]; then
-            echo "❌ $tp: 未找到真实 gcc 驱动，$root 实际布局："; find "$root" -maxdepth 3 | head -30
-            return 1
-          fi
-          ln -sf "$REAL" "$sbin/$tp-gcc"
+          local P t
           for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
             P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
             [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path "*/synth-bin/*" 2>/dev/null | head -1)
             if [ -n "$P" ]; then ln -sf "$P" "$sbin/$tp-$t"; fi || true
           done
           [ -e "$sbin/$tp-ld" ] || ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" 2>/dev/null || true
-          echo "== $tp synth-bin =="; ls -l "$sbin"
+          echo "== $tp binutils =="; ls -l "$sbin"
         }
-        mk_toolchain_synth kernel_workspace/gcc64 aarch64-linux-android || exit 1
-        mk_toolchain_synth kernel_workspace/gcc32 arm-linux-androideabi || exit 1
-        G64_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc64/synth-bin
-        G32_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc32/synth-bin
+        mk_toolchain_synth "$GCC64_ROOT" aarch64-linux-android || exit 1
+        mk_toolchain_synth "$GCC32_ROOT" arm-linux-androideabi || exit 1
+        G64_SBIN=$GCC64_ROOT/synth-bin
+        G32_SBIN=$GCC32_ROOT/synth-bin
         export PATH="$G64_SBIN:$G32_SBIN:$PATH"
         export CROSS_COMPILE="$G64_SBIN/aarch64-linux-android-"
         export CROSS_COMPILE_ARM32="$G32_SBIN/arm-linux-androideabi-"
-        export CC="$G64_SBIN/aarch64-linux-android-gcc"
+        export CC="$GCC64_CC"
         echo "== 工具链检查 =="
         "$CC" --version | head -1
-        command -v aarch64-linux-android-as aarch64-linux-android-ld arm-linux-androideabi-gcc || true
+        command -v aarch64-linux-android-as aarch64-linux-android-ld aarch64-linux-android-ar arm-linux-androideabi-as || true
 
         # 注意：必须用 cannon_defconfig（该机型专用配置），它内置 AW87519/AW87359 音频功放、
         # REGULATOR_PM8008(camera_power)、NFC pn553/p73、ov02b10 摄像头 OTP 等项目驱动。
@@ -219,43 +238,65 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE
         # 复用 defconfig 步骤的合成逻辑：find -L 只认真实文件、按体积挑 ELF，建 synth-bin/
+        # 该 tag 的包布局不固定（顶层 bin/ 有符号链接/包装脚本，个别版本连 -gcc 入口都没有），
+        # 且 bin/ 里还有 gcc-ar/gcc-nm/gcc-ranlib 之类的同名包装器。凭名字/体积挑不可靠，
+        # 所以对每个 *gcc* 候选直接 `--version`，只有输出真正含 gcc 的才是驱动/编译器（包装器
+        # 会透过 exec 原样输出真版本，ar/nm/ranlib 的包装器则会被拒之门外）。
+        GCC64_ROOT="$(cd kernel_workspace/gcc64 && pwd)"
+        GCC32_ROOT="$(cd kernel_workspace/gcc32 && pwd)"
+        pick_gcc_driver() {
+          local root="$1" out f pick=""
+          pick=$(find -L "$root" -type f -perm -111 -name '*gcc*' \
+              -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null \
+            | while read -r f; do
+                if printf '%s\n' "$( "$f" --version 2>&1 | head -1 )" | grep -qi 'gcc'; then echo "$f"; break; fi
+              done)
+          echo "$pick"
+        }
+        GCC64_CC="$(pick_gcc_driver "$GCC64_ROOT")"
+        GCC32_CC="$(pick_gcc_driver "$GCC32_ROOT")"
+        if [ -z "$GCC64_CC" ] || [ ! -x "$GCC64_CC" ]; then
+          echo "❌ gcc64 未找到真驱动，各 *gcc* 候选的 --version 输出："
+          find -L "$GCC64_ROOT" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '    %s -> %s\n' "$f" "$( "$f" --version 2>&1 | head -1 )"; done
+          exit 1
+        fi
+        if [ -z "$GCC32_CC" ] || [ ! -x "$GCC32_CC" ]; then
+          echo "❌ gcc32 未找到真驱动，各 *gcc* 候选的 --version 输出："
+          find -L "$GCC32_ROOT" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' 2>/dev/null | while read -r f; do printf '    %s -> %s\n' "$f" "$( "$f" --version 2>&1 | head -1 )"; done
+          exit 1
+        fi
+        # gcc 依赖 argv0 前缀寻找 cc1/libgcc，本包 cc1 在 libexec/gcc 下，统一用 GCC_EXEC_PREFIX 指路
+        export GCC_EXEC_PREFIX="$GCC64_ROOT/libexec/gcc/"
         mk_toolchain_synth() {
           local root="$1" tp="$2"
           root="$(cd "$root" && pwd)"
           local sbin="$root/synth-bin"
           rm -rf "$sbin"
           mkdir -p "$sbin"
-          local REAL P t
-          REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' -not -path '*/libexec/*' -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
-          [ -z "$REAL" ] && REAL=$(find -L "$root" -type f -perm -111 -name '*gcc*' -not -path '*/lib/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | head -1 | cut -d' ' -f2-) || true
-          if [ -z "$REAL" ]; then
-            echo "❌ $tp: 未找到真实 gcc 驱动，$root 实际布局："; find "$root" -maxdepth 3 | head -30
-            return 1
-          fi
-          ln -sf "$REAL" "$sbin/$tp-gcc"
+          local P t
           for t in as ld ld.bfd ar nm objcopy objdump readelf strip ranlib; do
             P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path '*/synth-bin/*' 2>/dev/null | while read -r f; do printf '%s %s\n' "$(wc -c < "$f")" "$f"; done | sort -rn | awk '$1>=100000{print $2}' | head -1)
             [ -n "$P" ] || P=$(find -L "$root" -type f -perm -111 -name "$t" -not -path "*/synth-bin/*" 2>/dev/null | head -1)
             if [ -n "$P" ]; then ln -sf "$P" "$sbin/$tp-$t"; fi || true
           done
           [ -e "$sbin/$tp-ld" ] || ln -sf "$sbin/$tp-ld.bfd" "$sbin/$tp-ld" 2>/dev/null || true
-          echo "== $tp synth-bin =="; ls -l "$sbin"
+          echo "== $tp binutils =="; ls -l "$sbin"
         }
-        mk_toolchain_synth kernel_workspace/gcc64 aarch64-linux-android || exit 1
-        mk_toolchain_synth kernel_workspace/gcc32 arm-linux-androideabi || exit 1
-        G64_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc64/synth-bin
-        G32_SBIN=$GITHUB_WORKSPACE/kernel_workspace/gcc32/synth-bin
+        mk_toolchain_synth "$GCC64_ROOT" aarch64-linux-android || exit 1
+        mk_toolchain_synth "$GCC32_ROOT" arm-linux-androideabi || exit 1
+        G64_SBIN=$GCC64_ROOT/synth-bin
+        G32_SBIN=$GCC32_ROOT/synth-bin
         export PATH="$G64_SBIN:$G32_SBIN:$PATH"
         export CROSS_COMPILE="$G64_SBIN/aarch64-linux-android-"
         export CROSS_COMPILE_ARM32="$G32_SBIN/arm-linux-androideabi-"
-        export CC="$G64_SBIN/aarch64-linux-android-gcc"
+        export CC="$GCC64_CC"
 
         echo "==== 编译环境诊断 ===="
         nproc
         df -h /
         free -m | head -2
         "$CC" --version | head -1
-        command -v aarch64-linux-android-as aarch64-linux-android-ld arm-linux-androideabi-gcc || true
+        command -v aarch64-linux-android-as aarch64-linux-android-ld aarch64-linux-android-ar arm-linux-androideabi-as || true
 
         # MTK 4.14 官方用 AOSP GCC4.9 编译。之前改用 clang10 + ld.lld，产出的 vmlinux
         # 与原版 DTB/ramdisk 组合不可引导：开机卡 logo（早期挂起/回退）。改回 GCC4.9：
