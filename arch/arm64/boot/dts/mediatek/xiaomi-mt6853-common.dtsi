@@ -449,7 +449,6 @@
 
 #include "mediatek/cust_mt6853_touch_1080x1920-cannon.dtsi"
 #include "mediatek/cust_cannon_camera.dtsi"
-#include <k6853v1_64_6360/cust.dtsi>
 /* DISPSYS GPIO standardization */
 
 #ifndef CONFIG_FPGA_EARLY_PORTING

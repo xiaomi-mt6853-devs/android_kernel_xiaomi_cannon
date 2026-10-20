@@ -13,6 +13,7 @@
  */
 
 #include "mediatek/cannon-mt6853.dtsi"
+#include <k6853v1_64_6360/cust.dtsi>
 
 / {
         model = "CANNON";
