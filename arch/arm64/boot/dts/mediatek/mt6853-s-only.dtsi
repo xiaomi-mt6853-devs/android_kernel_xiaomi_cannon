@@ -1,0 +1,12 @@
+/*
+ * S-only base nodes.
+ *
+ * /pinctrl/thermal-message exists in the stock S dtb but not in
+ * cannon-r-oss. It is the target of the thermal_message overlay fragment
+ * in cannon-s-only.dtsi.
+ */
+
+&pio {
+	thermal_message: thermal-message {
+	};
+};

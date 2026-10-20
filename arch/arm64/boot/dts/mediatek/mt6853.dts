@@ -6882,3 +6882,5 @@ page_owner=on loop.max_part=7";
 #ifdef CONFIG_MTK_ENABLE_GENIEZONE
 #include "mediatek/trusty.dtsi"
 #endif
+
+#include "mediatek/mt6853-s-only.dtsi"

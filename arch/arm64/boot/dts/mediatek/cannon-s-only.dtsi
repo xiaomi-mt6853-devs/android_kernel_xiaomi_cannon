@@ -1,0 +1,15 @@
+/*
+ * S-only overlay fragments.
+ *
+ * Present in the stock S dtbo but not in cannon-r-oss. Content taken from
+ * stock-dtbs/decompiled/dtbo.dts (fragment@3 and fragment@62).
+ */
+
+&mt6360_ldo {
+	sdcard_det_en = <1>;
+	sdcard_hlact = <0>;
+};
+
+&thermal_message {
+	board-sensor = "VIRTUAL-SENSOR";
+};

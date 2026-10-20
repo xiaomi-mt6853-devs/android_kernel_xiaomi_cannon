@@ -2,6 +2,7 @@
 this file is only for attribution of cannon
 */
 #include "mediatek/xiaomi-mt6853-common.dtsi"
+#include "mediatek/cannon-s-only.dtsi"
 #include "mediatek/novatek-nt36xxx-spi-cannon.dtsi"
 
 &ts_focal {
