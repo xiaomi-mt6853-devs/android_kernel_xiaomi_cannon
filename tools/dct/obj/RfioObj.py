@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2016 MediaTek Inc.
@@ -14,17 +14,18 @@
 
 import sys, os
 import re
-import ConfigParser
+import configparser as ConfigParser
 import string
 import xml.dom.minidom
 
-from ModuleObj import ModuleObj
+from obj.ModuleObj import ModuleObj
 from data.RfioData import RfioData
 
 from utility.util import log
 from utility.util import LogLevel
 from utility.util import compare
 from utility.util import sorted_key
+from utility.util import cmp
 
 
 class RfioObj(ModuleObj):
@@ -39,7 +40,7 @@ class RfioObj(ModuleObj):
         self.__mapPadName = {}
 
     def get_cfgInfo(self):
-        cp = ConfigParser.ConfigParser(allow_no_value=True)
+        cp = ConfigParser.ConfigParser(allow_no_value=True, strict=False)
         path = os.path.join(sys.path[0], 'config', 'RFIO.cmp')
         if not os.path.exists(path) or not os.path.isfile(path):
             log(LogLevel.error, 'Can not find YuSu.cmp file!')
@@ -64,7 +65,7 @@ class RfioObj(ModuleObj):
                 if cmp(node.nodeName, 'count') == 0:
                     if len(node.childNodes) == 0:
                         break
-                    self.__count = string.atoi(node.childNodes[0].nodeValue)
+                    self.__count = int(node.childNodes[0].nodeValue)
                 if cmp(node.nodeName, 'mmode') == 0:
                     if len(node.childNodes) == 0:
                         break

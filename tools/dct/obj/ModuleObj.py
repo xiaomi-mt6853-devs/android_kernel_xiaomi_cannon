@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2016 MediaTek Inc.
@@ -134,8 +134,8 @@ class ModuleObj:
     def writeHeader(name):
         str = ''
         if re.match(r'.*\.h$', name):
-            name = string.replace(name, '.', '_')
-            name = string.replace(name, '-', '_')
+            name = name.replace('.', '_')
+            name = name.replace('-', '_')
             str += '''#ifndef __%s\n''' %(name.upper())
             str += '''#define __%s\n''' %(name.upper())
             str += '''\n'''
@@ -149,7 +149,7 @@ class ModuleObj:
     @staticmethod
     def writeTail(name):
         if re.match(r'.*\.h$', name):
-            gen_str = '''\n\n#endif /* %s */\n''' %('__' + string.replace(name, '.', '_').upper())
+            gen_str = '''\n\n#endif /* %s */\n''' %('__' + name.replace('.', '_').upper())
             return gen_str
 
 

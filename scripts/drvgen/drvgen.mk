@@ -10,6 +10,7 @@
 # See http://www.gnu.org/licenses/gpl-2.0.html for more details.
 
 ifdef MTK_PLATFORM
+python ?= python3
 DRVGEN_PATH := drivers/misc/mediatek/dws/$(MTK_PLATFORM)
 
 ifeq ($(strip $(CONFIG_ARM64)), y)
