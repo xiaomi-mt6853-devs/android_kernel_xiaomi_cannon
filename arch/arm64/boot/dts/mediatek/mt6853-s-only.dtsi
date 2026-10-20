@@ -10,3 +10,105 @@
 	thermal_message: thermal-message {
 	};
 };
+
+&i2c9 {
+#include "mediatek/pm8008.dtsi"
+#include "mediatek/fan53870.dtsi"
+};
+
+/ {
+    ts_novatek: ts_novatek { };
+    ts_focal: ts_focal { };
+    xiaomi_touch: xiaomi_touch { };
+
+	haptic_pwm: haptic_pwm {
+		compatible = "awinic,aw8622";
+		pwm_data_invert = <0>;
+		hwen-gpio = <&pio 134 0>;
+		pwm_ch = <0>;
+		waveform_sample_period = <41666>;
+		center_freq = <208>;
+		default_pwm_freq = <26000>;
+		pinctrl-names = "haptic_gpio_aw8622_default", "haptic_gpio_aw8622_set";
+		pinctrl-0 = <&haptic_gpio_aw8622_default>;
+		pinctrl-1 = <&haptic_gpio_aw8622_set>;
+		status = "okay";
+	};
+
+	soter-shared-mem {
+		compatible = "microtrust,shared_mem";
+		no-map;
+		size = <0 0x800000>;
+		alignment = <0 0x1000000>;
+		alloc-ranges = <0 0x40000000 0 0x50000000>;
+	};
+
+	tboard_thermistor5: thermal-sensor5 {
+		compatible = "mediatek,mtboard-thermistor5";
+		io-channels = <&auxadc 4>;
+		io-channel-names = "thermistor-ch4";
+	};
+
+	tboard_thermistor6: thermal-sensor6 {
+		compatible = "mediatek,mtboard-thermistor6";
+		io-channels = <&auxadc 5>;
+		io-channel-names = "thermistor-ch5";
+	};
+
+	tboard_thermistor7: thermal-sensor7 {
+		compatible = "mediatek,mtboard-thermistor7";
+		io-channels = <&auxadc 6>;
+		io-channel-names = "thermistor-ch6";
+	};
+};
+
+&i2c6 {
+	aw87359: aw87359@59 {
+		compatible = "awinic,aw87359_pa";
+		reg = <0x59>;
+		status = "okay";
+	};
+
+	aw87519: aw87519@58 {
+		compatible = "awinic,aw87519_pa";
+		reg = <0x58>;
+		reset-gpio = <&pio 140 0>;
+		status = "okay";
+	};
+};
+
+&pio {
+	haptic_gpio_aw8622_default: haptic_gpio_aw8622_default@gpio131 {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO131__FUNC_GPIO131>;
+			slew-rate = <1>;
+			bias-disable;
+			output-low;
+			input-schmitt-enable = <0>;
+		};
+	};
+
+	haptic_gpio_aw8622_set: haptic_gpio_aw8622_set@gpio131 {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO131__FUNC_PWM_0>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+};
+
+&usb0phy {
+	usb_phy_tuning {
+		compatible = "mediatek,phy_tuning";
+		u2_vrt_ref_cn  = <5>;
+		u2_term_ref_cn = <5>;
+		u2_enhance_cn  = <2>;
+		u2_intr_cal_cn = <18>;
+		u2_discth_cn   = <7>;
+		u2_vrt_ref_gl_jp  = <4>;
+		u2_term_ref_gl_jp = <4>;
+		u2_enhance_gl_jp  = <3>;
+		u2_intr_cal_gl_jp = <20>;
+		u2_discth_gl_jp   = <7>;
+	};
+};

@@ -236,8 +236,9 @@ page_owner=on loop.max_part=7";
 
 		backlight {
 			label = "lcd-backlight";
-			max-brightness = <255>;
-			led-bits = <8>;
+			max-brightness = <2047>;
+			led-bits = <11>;
+			trans-bits = <11>;
 			default-state = "on";
 		};
 	};
@@ -1206,6 +1207,8 @@ page_owner=on loop.max_part=7";
 		compatible = "mediatek,ufshci";
 		reg = <0 0x11270000 0 0x2300>;
 		interrupts = <GIC_SPI 105 IRQ_TYPE_LEVEL_HIGH>;
+		vcc-voltage = <3000000>;
+		vcc-voltage-plus = <0>;
 
 		#ifndef CONFIG_FPGA_EARLY_PORTING
 		clocks =
@@ -1340,11 +1343,11 @@ page_owner=on loop.max_part=7";
 	};
 
 	touch:touch {
-		compatible = "goodix,touch";
+		compatible = "mediatek,touch";
 	};
 
 	goodix_fp: fingerprint {
-		compatible = "mediatek,goodix-fp";
+		compatible = "mediatek,fpc1022_irq", "mediatek,goodix-fp";
 	};
 
 	accdet: accdet {
@@ -2308,7 +2311,7 @@ page_owner=on loop.max_part=7";
 		reg = <0 0x10800000 0 0x6000>, /* CFG */
 			<0 0x10840000 0 0x9000>, /* ITCM */
 			<0 0x10820000 0 0x8000>; /* DTCM */
-		system = <0 0x56000000 0 0xa00000>;
+		system = <0 0x56000000 0 0x900000>;
 		interrupts = <GIC_SPI 444 IRQ_TYPE_LEVEL_HIGH>,
 			<GIC_SPI 446 IRQ_TYPE_LEVEL_HIGH>,
 			<GIC_SPI 448 IRQ_TYPE_LEVEL_HIGH>;
@@ -2731,6 +2734,7 @@ page_owner=on loop.max_part=7";
 		reg = <0 0x11210000 0 0x2000>;
 		pwr-regmap = <&sleep>;
 		#clock-cells = <1>;
+		mediatek,btcvsd_snd = <&btcvsd_snd>;
 	};
 
 	afe: mt6853-afe-pcm@11210000 {
@@ -2911,18 +2915,15 @@ page_owner=on loop.max_part=7";
 		mtk_spk_i2s_out = <3>;
 		mtk_spk_i2s_in = <0>;
 		/* mtk_spk_i2s_mck = <3>; */
-		mediatek,speaker-codec {
-			sound-dai = <&speaker_amp>;
-		};
 	};
 
 	/* feature : $enable $dl_mem $ul_mem $ref_mem $size */
 	snd_audio_dsp: snd_audio_dsp {
 		compatible = "mediatek,snd_audio_dsp";
 		mtk_dsp_voip = <0x1f 0xffffffff 0xffffffff 0xffffffff 0x30000>;
-		mtk_dsp_primary = <0x5 0xffffffff 0xffffffff \
+		mtk_dsp_primary = <0x1f 0xffffffff 0xffffffff \
 				   0xffffffff 0x30000>;
-		mtk_dsp_offload = <0x1d 0xffffffff 0xffffffff \
+		mtk_dsp_offload = <0x0 0xffffffff 0xffffffff \
 				   0xffffffff 0x400000>;
 		mtk_dsp_deep = <0x5 0xffffffff 0xffffffff 0xffffffff 0x30000>;
 		mtk_dsp_playback = <0x1 0x4 0xffffffff 0x14 0x30000>;
@@ -2931,7 +2932,7 @@ page_owner=on loop.max_part=7";
 		mtk_dsp_a2dp = <0x0 0xffffffff 0xffffffff 0xffffffff 0x40000>;
 		mtk_dsp_dataprovider = <0x0 0xffffffff 0xf 0xffffffff 0x30000>;
 		mtk_dsp_call_final = <0x5 0x4 0x10 0x14 0x18000>;
-		mtk_dsp_fast = <0x5 0xffffffff 0xffffffff 0xffffffff 0x5000>;
+		mtk_dsp_fast = <0x7 0xffffffff 0xffffffff 0xffffffff 0x5000>;
 		mtk_dsp_ktv = <0x1 0x8 0x12 0xffffffff 0x10000>;
 		mtk_dsp_capture_raw = <0x1 0xffffffff 0xffffffff 0xffffffff 0x20000>;
 		mtk_dsp_fm = <0x1 0xffffffff 0x10 0xffffffff 0x10000>;
@@ -3385,7 +3386,7 @@ page_owner=on loop.max_part=7";
 			<0>, /*MTK_DRM_OPT_MET_LOG*/
 			<1>, /*MTK_DRM_OPT_USE_PQ*/
 			<1>, /*MTK_DRM_OPT_ESD_CHECK_RECOVERY*/
-			<1>, /*MTK_DRM_OPT_ESD_CHECK_SWITCH*/
+			<0>, /*MTK_DRM_OPT_ESD_CHECK_SWITCH*/
 			<1>, /*MTK_DRM_OPT_PRESENT_FENCE*/
 			<0>, /*MTK_DRM_OPT_RDMA_UNDERFLOW_AEE*/
 			<1>, /*MTK_DRM_OPT_DSI_UNDERRUN_AEE*/
@@ -6009,20 +6010,20 @@ page_owner=on loop.max_part=7";
 		/* enable_pe_plus; */
 		enable_pd20_reset;
 		power_path_support;
-		max_charger_voltage = <6500000>;
+		max_charger_voltage = <12500000>;
 		fast_charge_voltage = <3000000>;
 
 		/* charging current */
 		usb_charger_current = <500000>;
-		ac_charger_current = <2050000>;
-		ac_charger_input_current = <2000000>;
-		non_std_ac_charger_current = <500000>;
+		ac_charger_current = <1500000>;
+		ac_charger_input_current = <1500000>;
+		non_std_ac_charger_current = <1000000>;
 		charging_host_charger_current = <1500000>;
-		ta_ac_charger_current = <3000000>;
-		pd_charger_current = <500000>;
+		ta_ac_charger_current = <1500000>;
+		pd_charger_current = <1500000>;
 
 		/* battery temperature protection */
-		temp_t4_threshold = <50>;
+		temp_t4_threshold = <60>;
 		temp_t3_threshold = <45>;
 		temp_t1_threshold = <0>;
 	};
@@ -6030,52 +6031,56 @@ page_owner=on loop.max_part=7";
 	charger: charger {
 		compatible = "mediatek,charger";
 		algorithm_name = "SwitchCharging2";
-		/* enable_sw_jeita; */
+		enable_sw_jeita;
 		/* enable_pe_plus; */
 		/* enable_pe_2; */
-		/* enable_pe_4; */
+		enable_pe_4;
+		set_cap_delay = <10>;
 		enable_type_c;
 		power_path_support;
 		enable_dynamic_mivr;
 
 		/* common */
-		battery_cv = <4350000>;
-		max_charger_voltage = <6500000>;
-		min_charger_voltage = <4600000>;
+		battery_cv = <4390000>;
+		max_charger_voltage = <12500000>;
+		min_charger_voltage = <4500000>;
 
 		/* dynamic mivr */
-		min_charger_voltage_1 = <4400000>;
+		min_charger_voltage_1 = <4300000>;
 		min_charger_voltage_2 = <4200000>;
-		max_dmivr_charger_current = <1400000>;
+		max_dmivr_charger_current = <2000000>;
 
 		/* charging current */
 		usb_charger_current_suspend = <0>;
 		usb_charger_current_unconfigured = <70000>;
 		usb_charger_current_configured = <500000>;
 		usb_charger_current = <500000>;
-		ac_charger_current = <2050000>;
-		ac_charger_input_current = <2000000>;
-		non_std_ac_charger_current = <500000>;
+		ac_charger_current = <3000000>;
+		ac_charger_input_current = <3000000>;
+		non_std_ac_charger_current = <1000000>;
+		pd_charger_current = <3000000>;
+		qc_charger_input_current = <2000000>;
+		check_hv_current = <1000000>;
 		charging_host_charger_current = <1500000>;
 		apple_1_0a_charger_current = <650000>;
 		apple_2_1a_charger_current = <800000>;
 		ta_ac_charger_current = <3000000>;
 
 		/* sw jeita */
-		jeita_temp_above_t4_cv = <4240000>;
-		jeita_temp_t3_to_t4_cv = <4240000>;
-		jeita_temp_t2_to_t3_cv = <4340000>;
-		jeita_temp_t1_to_t2_cv = <4240000>;
-		jeita_temp_t0_to_t1_cv = <4040000>;
-		jeita_temp_below_t0_cv = <4040000>;
-		temp_t4_thres = <50>;
-		temp_t4_thres_minus_x_degree = <47>;
+		jeita_temp_above_t4_cv = <4090000>;
+		jeita_temp_t3_to_t4_cv = <4090000>;
+		jeita_temp_t2_to_t3_cv = <4390000>;
+		jeita_temp_t1_to_t2_cv = <4390000>;
+		jeita_temp_t0_to_t1_cv = <4390000>;
+		jeita_temp_below_t0_cv = <4390000>;
+		temp_t4_thres = <60>;
+		temp_t4_thres_minus_x_degree = <58>;
 		temp_t3_thres = <45>;
-		temp_t3_thres_minus_x_degree = <39>;
+		temp_t3_thres_minus_x_degree = <43>;
 		temp_t2_thres = <10>;
-		temp_t2_thres_plus_x_degree = <16>;
-		temp_t1_thres = <0>;
-		temp_t1_thres_plus_x_degree = <6>;
+		temp_t2_thres_plus_x_degree = <8>;
+		temp_t1_thres = <5>;
+		temp_t1_thres_plus_x_degree = <2>;
 		temp_t0_thres = <0>;
 		temp_t0_thres_plus_x_degree = <0>;
 		temp_neg_10_thres = <0>;
@@ -6083,9 +6088,9 @@ page_owner=on loop.max_part=7";
 		/* battery temperature protection */
 		enable_min_charge_temp;
 		min_charge_temp = <0>;
-		min_charge_temp_plus_x_degree = <6>;
-		max_charge_temp = <50>;
-		max_charge_temp_minus_x_degree = <47>;
+		min_charge_temp_plus_x_degree = <2>;
+		max_charge_temp = <60>;
+		max_charge_temp_minus_x_degree = <58>;
 
 		/* PE */
 		ta_12v_support;
@@ -6136,9 +6141,27 @@ page_owner=on loop.max_part=7";
 		bif_threshold2 = <4300000>;
 		bif_cv_under_threshold2 = <4450000>;
 
+		qcom,thermal-mitigation-dcp
+			= <3000000 3000000 2800000 2700000 2450000 2200000 2000000
+			   1800000 1600000 1400000 1400000 1200000 1200000 1100000
+			   1100000 1000000>;
+		qcom,thermal-mitigation-pd-base
+			= <3000000 2800000 2600000 2400000 2200000 2000000 1800000
+			   1600000 1600000 1400000 1200000 1100000 1000000 900000
+			   752500 525000>;
+		qcom,thermal-mitigation-qc2
+			= <1800000 1700000 1600000 1500000 1400000 1300000 1200000
+			   1100000 1000000 900000 800000 700000 600000 600000
+			   600000 600000>;
+		mi,cycle-count-cv = <0 99 4390000
+				     100 199 4370000
+				     200 299 4350000
+				     300 2999 4330000>;
+		mi,connect_therm = <&pio 89 0>;
+
 		/* PD */
 		pd_vbus_low_bound = <5000000>;
-		pd_vbus_upper_bound = <5000000>;
+		pd_vbus_upper_bound = <9000000>;
 		pd_ichg_level_threshold = <1000000>; /* uA */
 		pd_stop_battery_soc = <80>;
 
@@ -6168,15 +6191,6 @@ page_owner=on loop.max_part=7";
 		compatible = "mediatek,irq_nfc-eint";
 	};
 	/* NFC end */
-};
-
-&i2c6 {
-	speaker_amp: speaker_amp@34 {
-		compatible = "mediatek,speaker_amp";
-		#sound-dai-cells = <0>;
-		reg = <0x34>;
-		status = "okay";
-	};
 };
 
 #ifdef CONFIG_MFD_MT6360_PMU
