@@ -125,3 +125,8 @@ all.config
 
 # fetched Android config fragments
 kernel/configs/android-*.cfg
+
+#
+# Build output
+/out/
+/prebuilts/
